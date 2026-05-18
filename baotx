@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+
+# --- Dependency Check ---
+for cmd in fzf jq yq curl; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Error: Required tool \"$cmd\" is not installed." >&2
+        exit 1
+    fi
+done
+
+CONFIG_FILE="${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
+
+# --- Help CLI ---
+if [ "$1" == "help" ] || [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    cat << 'EOF' >&2
+BaoTx - Context & Login Manager for OpenBao / Vault
+
+Usage:
+  baotx select              Opens fzf to select a cluster
+  baotx select <cluster>    Switches directly to the specified cluster
+  baotx login               Forces a new login for the current cluster
+  baotx login <cluster>     Switches to the cluster and forces a login
+
+Commands:
+  status                    Shows current context and token TTL
+  init                      Creates a .baoconfig.yaml template (if not present)
+  load                      Silently loads the current context (used for .zshrc)
+  set-cli <path>            Sets the path to the bao/vault binary
+  clear | unset             Clears current context and environment variables
+  help | -h | --help        Shows this help message
+EOF
+    exit 0
+fi
+
+# --- Auto-Completion Logic ---
+if [ "$1" == "completion" ]; then
+    if [ "$2" == "zsh" ]; then
+        cat << EOF
+_baotx_completion() {
+    local -a baotx_subcmds baotx_clusters
+    local curcontext="\$curcontext"
+
+    if [[ -f "$CONFIG_FILE" ]]; then
+        baotx_clusters=(\${(f)"\$(yq '.clusters | keys | .[]' "$CONFIG_FILE" 2>/dev/null)"})
+    fi
+
+    if (( CURRENT == 2 )); then
+        baotx_subcmds=(
+            'help:Show help message'
+            'init:Initialize template config'
+            'status:Show current context status'
+            'load:Load context'
+            'clear:Clear current context'
+            'unset:Alias for clear'
+            'set-cli:Set path to binary'
+            'login:Force login for a cluster'
+            'select:Select a cluster'
+            'completion:Generate auto-completion'
+        )
+        _describe -t commands 'baotx commands' baotx_subcmds
+    elif (( CURRENT == 3 )); then
+        case "\$words[2]" in
+            login|select)
+                _describe -t clusters 'clusters' baotx_clusters
+                ;;
+            set-cli)
+                _files
+                ;;
+        esac
+    fi
+}
+compdef _baotx_completion baotx
+EOF
+    elif [ "$2" == "bash" ]; then
+        cat << EOF
+_baotx_bash_completion() {
+    local cur prev opts clusters
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+    opts="help init status load clear unset set-cli login select completion"
+    if [ -f "$CONFIG_FILE" ]; then
+        clusters=\$(yq '.clusters | keys | .[]' "$CONFIG_FILE" 2>/dev/null)
+    fi
+    if [ \$COMP_CWORD -eq 1 ]; then
+        COMPREPLY=( \$(compgen -W "\$opts" -- "\$cur") )
+        return 0
+    fi
+    case "\$prev" in
+        login|select) COMPREPLY=( \$(compgen -W "\$clusters" -- "\$cur") ); return 0 ;;
+        set-cli) COMPREPLY=( \$(compgen -f -- "\$cur") ); return 0 ;;
+    esac
+}
+complete -F _baotx_bash_completion baotx
+EOF
+    fi
+    exit 0
+fi
+
+# --- Init CLI ---
+if [ "$1" == "init" ]; then
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "Error: Configuration file $CONFIG_FILE already exists!" >&2
+        exit 1
+    fi
+    cat <<EOF > "$CONFIG_FILE"
+cli_tool: ""
+clusters:
+  dev-cluster:
+    address: "https://bao-dev.example.com"
+    login: "userpass"
+    last_authentication: ""
+    token: ""
+    expire_token: ""
+current-cluster: ""
+EOF
+    chmod 600 "$CONFIG_FILE"
+    echo "Template successfully created at $CONFIG_FILE." >&2
+    exit 0
+fi
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Config file not found. Run \"baotx init\" to create a template." >&2
+    exit 1
+fi
+
+# --- Status Command ---
+if [ "$1" == "status" ]; then
+    CUR=$(yq '.current-cluster' "$CONFIG_FILE" 2>/dev/null)
+    if [ -z "$CUR" ] || [ "$CUR" == "null" ]; then
+        echo "No cluster selected." >&2
+    else
+        ADDR=$(yq ".clusters.\"$CUR\".address" "$CONFIG_FILE")
+        EXP=$(yq ".clusters.\"$CUR\".expire_token" "$CONFIG_FILE")
+        echo "--- BaoTx Status ---" >&2
+        echo "Cluster:  $CUR" >&2
+        echo "Address:  $ADDR" >&2
+        if [ -n "$EXP" ] && [ "$EXP" != "null" ]; then
+            DIFF=$(($(date -d "$EXP" +%s) - $(date +%s)))
+            if [ $DIFF -le 0 ]; then
+                echo "Token:    EXPIRED" >&2
+            else
+                HOURS=$((DIFF / 3600))
+                MINS=$(( (DIFF % 3600) / 60 ))
+                echo "Token:    Valid for ${HOURS}h ${MINS}m" >&2
+            fi
+        else
+            echo "Token:    No expiry set" >&2
+        fi
+    fi
+    exit 0
+fi
+
+# --- Load & Clear Logic ---
+if [ "$1" == "load" ]; then
+    CUR=$(yq '.current-cluster' "$CONFIG_FILE" 2>/dev/null)
+    if [ -n "$CUR" ] && [ "$CUR" != "null" ]; then
+        ADDR=$(yq ".clusters.\"$CUR\".address" "$CONFIG_FILE")
+        TOKEN=$(yq ".clusters.\"$CUR\".token" "$CONFIG_FILE")
+        echo "export VAULT_ADDR=\"$ADDR\""
+        echo "export VAULT_TOKEN=\"$TOKEN\""
+        echo "export BAO_ADDR=\"$ADDR\""
+        echo "export BAO_TOKEN=\"$TOKEN\""
+        echo "export BAOTX_CLUSTER=\"$CUR\""
+    fi
+    exit 0
+fi
+
+if [ "$1" == "clear" ] || [ "$1" == "unset" ]; then
+    yq -i '.current-cluster = ""' "$CONFIG_FILE"
+    echo "Context cleared." >&2
+    echo "unset VAULT_ADDR VAULT_TOKEN BAO_ADDR BAO_TOKEN BAOTX_CLUSTER"
+    exit 0
+fi
+
+# --- CLI Detection & Set ---
+if [ "$1" == "set-cli" ]; then
+    yq -i ".cli_tool = \"$2\"" "$CONFIG_FILE"
+    echo "CLI tool updated." >&2
+    exit 0
+fi
+
+CLI_TOOL=$(yq '.cli_tool // ""' "$CONFIG_FILE")
+if [ -z "$CLI_TOOL" ] || [ "$CLI_TOOL" == "null" ]; then
+    if command -v bao >/dev/null 2>&1; then CLI_TOOL="bao"
+    elif command -v vault >/dev/null 2>&1; then CLI_TOOL="vault"
+    else CLI_TOOL="curl"; fi
+fi
+
+# --- Main Cluster Logic ---
+FORCE_LOGIN=0
+SELECTED=""
+
+if [ "$1" == "login" ]; then
+    FORCE_LOGIN=1
+    shift
+fi
+
+# --- select Logik ---
+if [ "$1" == "select" ]; then
+    if [ -n "$2" ]; then
+        SELECTED="$2"
+    else
+        CLUSTERS=$(yq '.clusters | keys | .[]' "$CONFIG_FILE")
+        SELECTED=$(echo "$CLUSTERS" | fzf --prompt="${CLI_TOOL^^} Cluster > " --height=40% --layout=reverse)
+    fi
+elif [ -n "$1" ]; then
+    SELECTED="$1"
+fi
+
+# Abbruch wenn nichts ausgewählt oder übergeben wurde
+[ -z "$SELECTED" ] || [ "$SELECTED" == "null" ] && exit 0
+
+ADDR=$(yq ".clusters.\"$SELECTED\".address" "$CONFIG_FILE")
+LOGIN_METHOD=$(yq ".clusters.\"$SELECTED\".login" "$CONFIG_FILE")
+TOKEN=$(yq ".clusters.\"$SELECTED\".token" "$CONFIG_FILE")
+EXPIRE_TOKEN=$(yq ".clusters.\"$SELECTED\".expire_token" "$CONFIG_FILE")
+
+# Validierung ob Cluster existiert
+if [ "$ADDR" == "null" ]; then
+    echo "Error: Cluster \"$SELECTED\" not found in config." >&2
+    exit 1
+fi
+
+NEEDS_LOGIN=$FORCE_LOGIN
+if [ "$NEEDS_LOGIN" -eq 0 ]; then
+    if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then NEEDS_LOGIN=1
+    elif [ -n "$EXPIRE_TOKEN" ] && [ "$EXPIRE_TOKEN" != "null" ]; then
+        [ $(($(date -d "$EXPIRE_TOKEN" +%s) - 60)) -lt $(date +%s) ] && NEEDS_LOGIN=1
+    fi
+    
+    if [ "$NEEDS_LOGIN" -eq 0 ]; then
+        if [ "$CLI_TOOL" == "curl" ]; then
+            ! curl -s -f -H "X-Vault-Token: $TOKEN" "$ADDR/v1/auth/token/lookup-self" >/dev/null 2>&1 && NEEDS_LOGIN=1
+        else
+            ! VAULT_ADDR="$ADDR" VAULT_TOKEN="$TOKEN" $CLI_TOOL token lookup >/dev/null 2>&1 && NEEDS_LOGIN=1
+        fi
+    fi
+fi
+
+if [ "$NEEDS_LOGIN" -eq 1 ]; then
+    if [ "$CLI_TOOL" == "curl" ]; then
+        echo "Error: Login not possible via curl. Please install bao or vault for interactive login." >&2
+        exit 1
+    fi
+    echo "Logging into $SELECTED..." >&2
+    LOGIN_JSON=$($CLI_TOOL login -method="$LOGIN_METHOD" -address="$ADDR" -format=json)
+    [ $? -ne 0 ] && echo "Login failed!" >&2 && exit 1
+    
+    TOKEN=$(echo "$LOGIN_JSON" | jq -r '.auth.client_token')
+    DUR=$(echo "$LOGIN_JSON" | jq -r '.auth.lease_duration')
+    EXP=$(date -d "+$DUR seconds" -Iseconds)
+    
+    yq -i ".clusters.\"$SELECTED\".token = \"$TOKEN\" | .clusters.\"$SELECTED\".expire_token = \"$EXP\" | .current-cluster = \"$SELECTED\"" "$CONFIG_FILE"
+    echo "Login successful. Valid until: $EXP" >&2
+else
+    echo "Switched to $SELECTED" >&2
+    yq -i ".current-cluster = \"$SELECTED\"" "$CONFIG_FILE"
+fi
+
+echo "export VAULT_ADDR=\"$ADDR\""
+echo "export VAULT_TOKEN=\"$TOKEN\""
+echo "export BAO_ADDR=\"$ADDR\""
+echo "export BAO_TOKEN=\"$TOKEN\""
+echo "export BAOTX_CLUSTER=\"$SELECTED\""
