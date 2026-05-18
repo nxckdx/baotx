@@ -250,8 +250,9 @@ if [ "$NEEDS_LOGIN" -eq 1 ]; then
     TOKEN=$(echo "$LOGIN_JSON" | jq -r '.auth.client_token')
     DUR=$(echo "$LOGIN_JSON" | jq -r '.auth.lease_duration')
     EXP=$(date -d "+$DUR seconds" -Iseconds)
+    NOW=$(date -Iseconds)
     
-    yq -i ".clusters.\"$SELECTED\".token = \"$TOKEN\" | .clusters.\"$SELECTED\".expire_token = \"$EXP\" | .current-cluster = \"$SELECTED\"" "$CONFIG_FILE"
+    yq -i ".clusters.\"$SELECTED\".token = \"$TOKEN\" | .clusters.\"$SELECTED\".expire_token = \"$EXP\" | .clusters.\"$SELECTED\".last_authentication = \"$NOW\" | .current-cluster = \"$SELECTED\"" "$CONFIG_FILE"
     echo "Login successful. Valid until: $EXP" >&2
 else
     echo "Switched to $SELECTED" >&2
