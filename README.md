@@ -84,3 +84,13 @@ clusters:
     login: "token"
 current-cluster: "prod"
 ```
+
+## Future Ideas & Contributing
+
+Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
+
+Some ideas for future versions:
+- **Namespace Support:** Add support for Vault/OpenBao namespaces to switch between them as easily as switching clusters.
+- **Optional Subshell Mode:** Implement a command (e.g., `baotx shell`) that starts a new shell session with the context already loaded, avoiding the need for `eval` in the parent shell for temporary tasks.
+- **Config Encryption:** Optionally encrypt the `~/.baoconfig.yaml` to better protect stored tokens.
+- **Multiple Profiles:** Support different login profiles/roles for the same cluster.
