@@ -17,6 +17,16 @@ BaoTx relies on the following tools:
 
 ## Installation
 
+### The Quick Way (Interactive Installer)
+
+Run the following command in your terminal. It will check dependencies, install the script, and guide you through the shell integration:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/nxckdx/baotx/main/install.sh | bash
+```
+
+### The Manual Way
+
 1. Download the `baotx` script to a directory in your `$PATH` (e.g., `/usr/local/bin` or `~/bin`):
    ```bash
    chmod +x baotx
@@ -52,7 +62,7 @@ baotx() {
 }
 
 # Optional: Load the last active context on shell startup
-eval "$(baotx load 2>/dev/null)"
+baotx load 2>/dev/null
 
 # Optional: Add Auto-Completion
 source <(baotx completion zsh)
@@ -64,6 +74,7 @@ source <(baotx completion zsh)
 | :--- | :--- |
 | `baotx select` | Open `fzf` to select a cluster from your config. |
 | `baotx select <name>` | Switch directly to a specific cluster. |
+| `baotx ns` | Select a namespace for the current cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx status` | Show the current cluster, address, and token TTL. |
 | `baotx clear` | Unset all environment variables and clear context. |
@@ -79,6 +90,7 @@ clusters:
   prod:
     address: "https://bao.example.com"
     login: "oidc" # login method
+    namespace: "admin" # optional active namespace
   dev:
     address: "http://127.0.0.1:8200"
     login: "token"
@@ -90,7 +102,6 @@ current-cluster: "prod"
 Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
 
 Some ideas for future versions:
-- **Namespace Support:** Add support for Vault/OpenBao namespaces to switch between them as easily as switching clusters.
 - **Optional Subshell Mode:** Implement a command (e.g., `baotx shell`) that starts a new shell session with the context already loaded, avoiding the need for `eval` in the parent shell for temporary tasks.
 - **Config Encryption:** Optionally encrypt the `~/.baoconfig.yaml` to better protect stored tokens.
 - **Multiple Profiles:** Support different login profiles/roles for the same cluster.
