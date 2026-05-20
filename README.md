@@ -106,7 +106,7 @@ clusters:
     namespace: "admin" # optional active namespace
   dev:
     address: "http://127.0.0.1:8200"
-    login: "token"
+    login: "token"  # Can also be just one string and not list
 current-cluster: "prod"
 ```
 
