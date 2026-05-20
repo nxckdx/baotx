@@ -6,6 +6,7 @@ set -eo pipefail
 
 readonly CONFIG_FILE="${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
 readonly SCRIPT_PATH="$(readlink -f "$0")"
+readonly DATA_DIR="$HOME/.local/share/baotx"
 
 # --- Helper Functions ---
 
@@ -21,6 +22,109 @@ _check_deps() {
             _error "Required tool \"$cmd\" is not installed."
         fi
     done
+    
+    mkdir -p "$DATA_DIR"
+}
+
+_get_storage_backend() {
+    local backend
+    backend=$(_get_config '.token_storage // "keyring"')
+    echo "$backend"
+}
+
+_store_token() {
+    local cluster="$1" token="$2"
+    local backend
+    backend=$(_get_storage_backend)
+
+    case "$backend" in
+        keyring)
+            if command -v secret-tool >/dev/null 2>&1; then
+                secret-tool store --label="BaoTx: $cluster" service baotx cluster "$cluster" <<< "$token"
+            elif command -v security >/dev/null 2>&1; then
+                security add-generic-password -a "$USER" -s "baotx-$cluster" -w "$token" -U
+            else
+                _log "Warning: No keyring tool found. Falling back to plain text."
+                _set_config ".clusters.\"$cluster\".token = \"$token\""
+            fi
+            ;;
+        gpg)
+            local key_id
+            key_id=$(_get_config '.storage_key')
+            [[ -z "$key_id" || "$key_id" == "null" ]] && _error "token_storage is 'gpg' but storage_key (GPG Key ID) is not set."
+            echo "$token" | gpg --encrypt --recipient "$key_id" --armor > "$DATA_DIR/$cluster.gpg"
+            ;;
+        age)
+            local key_id
+            key_id=$(_get_config '.storage_key')
+            [[ -z "$key_id" || "$key_id" == "null" ]] && _error "token_storage is 'age' but storage_key (Public Key) is not set."
+            echo "$token" | age -r "$key_id" -a > "$DATA_DIR/$cluster.age"
+            ;;
+        plain)
+            _set_config ".clusters.\"$cluster\".token = \"$token\""
+            ;;
+        *) _error "Unknown token_storage backend: $backend" ;;
+    esac
+}
+
+_retrieve_token() {
+    local cluster="$1"
+    local backend token
+    backend=$(_get_storage_backend)
+
+    case "$backend" in
+        keyring)
+            if command -v secret-tool >/dev/null 2>&1; then
+                token=$(secret-tool lookup service baotx cluster "$cluster")
+            elif command -v security >/dev/null 2>&1; then
+                token=$(security find-generic-password -a "$USER" -s "baotx-$cluster" -w 2>/dev/null)
+            fi
+            ;;
+        gpg)
+            if [[ -f "$DATA_DIR/$cluster.gpg" ]]; then
+                token=$(gpg --decrypt "$DATA_DIR/$cluster.gpg" 2>/dev/null)
+            fi
+            ;;
+        age)
+            local identity
+            identity=$(_get_config '.storage_identity') # age needs a private key/identity file for decryption
+            if [[ -f "$DATA_DIR/$cluster.age" ]]; then
+                if [[ -n "$identity" && "$identity" != "null" ]]; then
+                    token=$(age --decrypt -i "$identity" "$DATA_DIR/$cluster.age" 2>/dev/null)
+                else
+                    token=$(age --decrypt "$DATA_DIR/$cluster.age" 2>/dev/null)
+                fi
+            fi
+            ;;
+        plain)
+            token=$(_get_config ".clusters.\"$cluster\".token // \"\"")
+            ;;
+    esac
+
+    # Fallback to config file if not found in backend (for transition)
+    if [[ -z "$token" || "$token" == "null" ]]; then
+        token=$(_get_config ".clusters.\"$cluster\".token // \"\"")
+    fi
+    echo "$token"
+}
+
+_delete_token() {
+    local cluster="$1"
+    local backend
+    backend=$(_get_storage_backend)
+
+    case "$backend" in
+        keyring)
+            if command -v secret-tool >/dev/null 2>&1; then
+                secret-tool clear service baotx cluster "$cluster"
+            elif command -v security >/dev/null 2>&1; then
+                security delete-generic-password -a "$USER" -s "baotx-$cluster" 2>/dev/null || true
+            fi
+            ;;
+        gpg) rm -f "$DATA_DIR/$cluster.gpg" ;;
+        age) rm -f "$DATA_DIR/$cluster.age" ;;
+    esac
+    _set_config "del(.clusters.\"$cluster\".token)"
 }
 
 _get_cli_tool() {
@@ -113,25 +217,30 @@ cmd_status() {
     if [[ -z "$cur" || "$cur" == "null" ]]; then
         _log "No cluster selected."
     else
-        local addr exp ns diff hours mins
+        local addr exp ns diff hours mins token
         addr=$(_get_config ".clusters.\"$cur\".address")
         exp=$(_get_config ".clusters.\"$cur\".expire_token")
         ns=$(_get_config ".clusters.\"$cur\".namespace")
+        token=$(_retrieve_token "$cur")
         _log "--- BaoTx Status ---"
         _log "Cluster:   $cur"
         _log "Address:   $addr"
         [[ -n "$ns" && "$ns" != "null" ]] && _log "Namespace: $ns"
-        if [[ -n "$exp" && "$exp" != "null" ]]; then
-            diff=$(($(date -d "$exp" +%s) - $(date +%s)))
-            if (( diff <= 0 )); then
-                _log "Token:     EXPIRED"
+        if [[ -n "$token" ]]; then
+            if [[ -n "$exp" && "$exp" != "null" ]]; then
+                diff=$(($(date -d "$exp" +%s) - $(date +%s)))
+                if (( diff <= 0 )); then
+                    _log "Token:     EXPIRED"
+                else
+                    hours=$((diff / 3600))
+                    mins=$(( (diff % 3600) / 60 ))
+                    _log "Token:     Valid for ${hours}h ${mins}m"
+                fi
             else
-                hours=$((diff / 3600))
-                mins=$(( (diff % 3600) / 60 ))
-                _log "Token:     Valid for ${hours}h ${mins}m"
+                _log "Token:     Valid (no expiry set)"
             fi
         else
-            _log "Token:     No expiry set"
+            _log "Token:     NOT LOGGED IN"
         fi
     fi
 }
@@ -142,7 +251,7 @@ cmd_load() {
     cur=$(_get_config '.current-cluster')
     if [[ -n "$cur" && "$cur" != "null" ]]; then
         addr=$(_get_config ".clusters.\"$cur\".address")
-        token=$(_get_config ".clusters.\"$cur\".token")
+        token=$(_retrieve_token "$cur")
         ns=$(_get_config ".clusters.\"$cur\".namespace")
         _export_context "$cur" "$addr" "$token" "$ns"
     fi
@@ -150,6 +259,11 @@ cmd_load() {
 
 # DESC: Clears current context and environment variables
 cmd_clear() {
+    local cur
+    cur=$(_get_config '.current-cluster')
+    if [[ -n "$cur" && "$cur" != "null" ]]; then
+        _delete_token "$cur"
+    fi
     _set_config '.current-cluster = ""'
     _log "Context cleared."
     echo "unset VAULT_ADDR VAULT_TOKEN BAO_ADDR BAO_TOKEN BAOTX_CLUSTER VAULT_NAMESPACE BAO_NAMESPACE"
@@ -192,7 +306,7 @@ cmd_namespace() {
     # Check if we need a login, but don't force a switch/export yet
     cli_tool=$(_get_cli_tool)
     addr=$(_get_config ".clusters.\"$cur\".address")
-    token=$(_get_config ".clusters.\"$cur\".token")
+    token=$(_retrieve_token "$cur")
     local exp_token=$(_get_config ".clusters.\"$cur\".expire_token")
 
     local needs_login=0
@@ -270,7 +384,7 @@ _perform_switch() {
         login_method=$(_get_config "(.clusters.\"$selected\".login | (select(tag == \"!!seq\") | .[0]) // .)")
     fi
 
-    token=$(_get_config ".clusters.\"$selected\".token")
+    token=$(_retrieve_token "$selected")
     exp_token=$(_get_config ".clusters.\"$selected\".expire_token")
     ns=$(_get_config ".clusters.\"$selected\".namespace")
     cli_tool=$(_get_cli_tool)
@@ -302,7 +416,8 @@ _perform_switch() {
         exp_token=$(date -d "+$dur seconds" -Iseconds)
         now=$(date -Iseconds)
         
-        _set_config ".clusters.\"$selected\".token = \"$token\" | .clusters.\"$selected\".expire_token = \"$exp_token\" | .clusters.\"$selected\".last_authentication = \"$now\" | .current-cluster = \"$selected\""
+        _store_token "$selected" "$token"
+        _set_config ".clusters.\"$selected\".expire_token = \"$exp_token\" | .clusters.\"$selected\".last_authentication = \"$now\" | .current-cluster = \"$selected\""
         _log "Login successful. Valid until: $exp_token"
     else
         _log "Switched to $selected"

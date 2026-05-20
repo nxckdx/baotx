@@ -53,6 +53,13 @@ for cmd in curl jq yq fzf; do
     fi
 done
 
+# Keyring check
+if command -v secret-tool >/dev/null 2>&1 || command -v security >/dev/null 2>&1; then
+    log "  [✓] Keyring tool found"
+else
+    warn "No keyring tool (secret-tool or security) found. Tokens will be stored in plain text."
+fi
+
 # 2. Determine Install Location
 if [ "$OVERWRITE" = false ]; then
     INSTALL_DIR="/usr/local/bin"

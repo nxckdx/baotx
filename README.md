@@ -14,6 +14,7 @@ BaoTx relies on the following tools:
 - `yq` (for YAML configuration management)
 - `curl` (for health checks)
 - `bao` or `vault` CLI
+- **Optional (Secure Storage):** `secret-tool` (Linux), `security` (macOS), `gpg`, or `age`
 
 ## Installation
 
@@ -45,14 +46,12 @@ Since a standalone binary/script cannot modify the environment variables of your
 Add the following to your `~/.zshrc`:
 
 ```bash
-# BaoTx Wrapper
+# >>> baotx initialize >>>
+# !! Contents within this block are managed by baotx !!
 baotx() {
     local out
-    # Capture stdout for eval, let stderr through for UI/messages
     out=$(command baotx "$@")
     local ret=$?
-    
-    # Don't eval if the command is 'completion' or if there is no output
     if [[ "$1" == "completion" ]]; then
         echo "$out"
     elif [[ -n "$out" ]]; then
@@ -60,12 +59,9 @@ baotx() {
     fi
     return $ret
 }
-
-# Optional: Load the last active context on shell startup
 baotx load 2>/dev/null
-
-# Optional: Add Auto-Completion
-source <(baotx completion zsh)
+source <(baotx completion zsh 2>/dev/null || baotx completion bash 2>/dev/null)
+# <<< baotx initialize <<<
 ```
 
 ## Usage
@@ -85,6 +81,30 @@ source <(baotx completion zsh)
 
 By default, the configuration is stored in `~/.baoconfig.yaml`.
 
+### Token Storage Options
+
+BaoTx supports multiple backends for storing your `VAULT_TOKEN`. You can configure this globally in your `~/.baoconfig.yaml`:
+
+| Backend | Description | Required Config |
+| :--- | :--- | :--- |
+| `keyring` | (Default) Uses system keychain (`secret-tool` or macOS Keychain). | None |
+| `gpg` | Encrypts tokens using GPG. Stored in `~/.local/share/baotx/`. | `storage_key: "KEY_ID"` |
+| `age` | Encrypts tokens using `age`. Stored in `~/.local/share/baotx/`. | `storage_key: "PUB_KEY"`, `storage_identity: "PATH"` |
+| `plain` | Stores tokens in plain text in `~/.baoconfig.yaml`. | None |
+
+Example for GPG:
+```yaml
+token_storage: "gpg"
+storage_key: "user@example.com"
+```
+
+Example for Age:
+```yaml
+token_storage: "age"
+storage_key: "age1..."
+storage_identity: "~/.ssh/id_ed25519" # optional
+```
+
 ### Custom Configuration Path
 
 You can override the default configuration path by setting the `BAOTX_CONFIG` environment variable in your `.zshrc` or `.bashrc`:
@@ -97,6 +117,7 @@ export BAOTX_CONFIG="$HOME/my-baotx-config.yaml"
 
 ```yaml
 cli_tool: "bao" # or "vault"
+token_storage: "keyring"
 clusters:
   prod:
     address: "https://bao.example.com"
@@ -165,6 +186,3 @@ style = "bold yellow"
 ## Future Ideas & Contributing
 
 Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
-
-Some ideas for future versions:
-- **Config Encryption:** Optionally encrypt the `~/.baoconfig.yaml` to better protect stored tokens.
