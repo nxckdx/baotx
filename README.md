@@ -106,8 +106,60 @@ clusters:
     namespace: "admin" # optional active namespace
   dev:
     address: "http://127.0.0.1:8200"
-    login: "token"  # Can also be just one string and not list
+    login: "token"
 current-cluster: "prod"
+```
+
+## Starship Integration
+
+If you use [Starship](https://starship.rs/), you can add a custom module to display your current BaoTx context, namespace, and token TTL in your prompt.
+
+Add the following to your `~/.config/starship.toml`:
+
+```toml
+[custom.baotx]
+command = """
+cluster=$BAOTX_CLUSTER
+if [ -z "$cluster" ]; then exit 0; fi
+
+LOCK_CLOSED=""
+LOCK_OPEN=""
+WARN_ICON=""
+
+if [ -n "$BAO_NAMESPACE" ]; then
+    DISPLAY_NAME="${BAO_NAMESPACE}@${cluster}"
+else
+    DISPLAY_NAME="$cluster"
+fi
+
+# Respect BAOTX_CONFIG if set
+CONFIG="${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
+exp=$(yq -r ".clusters.\"$cluster\".expire_token" "$CONFIG")
+
+if [ "$exp" != "null" ] && [ -n "$exp" ]; then
+    diff=$(( $(date -d "$exp" +%s) - $(date +%s) ))
+    
+    if [ $diff -le 0 ]; then
+        # TOKEN EXPIRED
+        echo "$LOCK_CLOSED $WARN_ICON $DISPLAY_NAME EXPIRED"
+    else
+        hours=$((diff / 3600))
+        mins=$(( (diff % 3600) / 60 ))
+        
+        if [ $hours -gt 0 ]; then
+            echo "$LOCK_OPEN $DISPLAY_NAME (${hours}h ${mins}m)"
+        else
+            echo "$LOCK_OPEN $DISPLAY_NAME (${mins}m)"
+        fi
+    fi
+else
+    echo "$LOCK_CLOSED $DISPLAY_NAME"
+fi
+"""
+when = 'test -n "$BAOTX_CLUSTER"'
+shell = ["bash", "--noprofile", "--norc"]
+format = "[$output]($style) "
+style = "bold yellow"
 ```
 
 ## Future Ideas & Contributing
@@ -115,5 +167,4 @@ current-cluster: "prod"
 Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
 
 Some ideas for future versions:
-- **Optional Subshell Mode:** Implement a command (e.g., `baotx shell`) that starts a new shell session with the context already loaded, avoiding the need for `eval` in the parent shell for temporary tasks.
 - **Config Encryption:** Optionally encrypt the `~/.baoconfig.yaml` to better protect stored tokens.
