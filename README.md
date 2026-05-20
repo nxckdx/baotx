@@ -76,6 +76,7 @@ source <(baotx completion zsh)
 | `baotx select <name>` | Switch directly to a specific cluster. |
 | `baotx ns` | Select a namespace for the current cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
+| `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
 | `baotx status` | Show the current cluster, address, and token TTL. |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
@@ -99,7 +100,9 @@ cli_tool: "bao" # or "vault"
 clusters:
   prod:
     address: "https://bao.example.com"
-    login: "oidc" # login method
+    login: 
+      - "oidc"      # The first method is the default
+      - "userpass"  # Alternative method
     namespace: "admin" # optional active namespace
   dev:
     address: "http://127.0.0.1:8200"
@@ -114,4 +117,3 @@ Contributions are welcome! If you have an idea or want to tackle one of the poin
 Some ideas for future versions:
 - **Optional Subshell Mode:** Implement a command (e.g., `baotx shell`) that starts a new shell session with the context already loaded, avoiding the need for `eval` in the parent shell for temporary tasks.
 - **Config Encryption:** Optionally encrypt the `~/.baoconfig.yaml` to better protect stored tokens.
-- **Multiple Profiles:** Support different login profiles/roles for the same cluster.

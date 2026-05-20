@@ -29,11 +29,18 @@ echo "Welcome to the BaoTx installer!"
 echo "--------------------------------"
 
 # 0. Check for existing installation
+OVERWRITE=false
 if command -v baotx >/dev/null 2>&1; then
     EXISTING_PATH=$(command -v baotx)
-    log "BaoTx is already installed at $EXISTING_PATH"
-    log "Installation aborted to prevent accidental overwrites."
-    exit 0
+    warn "BaoTx is already installed at $EXISTING_PATH"
+    read -p "Do you want to overwrite it? (y/n): " overwrite_confirm
+    if [[ "$overwrite_confirm" =~ ^[Yy] ]]; then
+        OVERWRITE=true
+        INSTALL_DIR=$(dirname "$EXISTING_PATH")
+    else
+        log "Installation aborted."
+        exit 0
+    fi
 fi
 
 # 1. Check Dependencies
@@ -47,16 +54,18 @@ for cmd in curl jq yq fzf; do
 done
 
 # 2. Determine Install Location
-INSTALL_DIR="/usr/local/bin"
-if [ ! -w "$INSTALL_DIR" ]; then
-    INSTALL_DIR="$HOME/.local/bin"
-    mkdir -p "$INSTALL_DIR"
-fi
+if [ "$OVERWRITE" = false ]; then
+    INSTALL_DIR="/usr/local/bin"
+    if [ ! -w "$INSTALL_DIR" ]; then
+        INSTALL_DIR="$HOME/.local/bin"
+        mkdir -p "$INSTALL_DIR"
+    fi
 
-read -p "Install baotx to [$INSTALL_DIR]? (y/n): " confirm_dir
-if [[ "$confirm_dir" =~ ^[Nn] ]]; then
-    read -p "Enter custom directory: " INSTALL_DIR
-    mkdir -p "$INSTALL_DIR"
+    read -p "Install baotx to [$INSTALL_DIR]? (y/n): " confirm_dir
+    if [[ "$confirm_dir" =~ ^[Nn] ]]; then
+        read -p "Enter custom directory: " INSTALL_DIR
+        mkdir -p "$INSTALL_DIR"
+    fi
 fi
 
 # 3. Download baotx
@@ -78,22 +87,27 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # 5. Shell Integration
-WRAPPER_CODE=$(cat << 'EOF'
+MARKER_START="# >>> baotx initialize >>>"
+MARKER_END="# <<< baotx initialize <<<"
 
-# BaoTx Wrapper
+WRAPPER_CODE=$(cat << EOF
+
+$MARKER_START
+# !! Contents within this block are managed by baotx !!
 baotx() {
     local out
-    out=$(command baotx "$@")
-    local ret=$?
-    if [[ "$1" == "completion" ]]; then
-        echo "$out"
-    elif [[ -n "$out" ]]; then
-        eval "$out"
+    out=\$(command baotx "\$@")
+    local ret=\$?
+    if [[ "\$1" == "completion" ]]; then
+        echo "\$out"
+    elif [[ -n "\$out" ]]; then
+        eval "\$out"
     fi
-    return $ret
+    return \$ret
 }
 baotx load 2>/dev/null
 source <(baotx completion zsh 2>/dev/null || baotx completion bash 2>/dev/null)
+$MARKER_END
 EOF
 )
 
@@ -108,21 +122,27 @@ esac
 
 if [ -n "$RC_FILE" ]; then
     echo -e "\n${YELLOW}Shell Integration:${NC}"
-    echo "BaoTx needs a wrapper function to set environment variables in your current shell."
     
-    read -p "Automatically append wrapper to $RC_FILE? (y/n): " confirm_rc
-    if [[ "$confirm_rc" =~ ^[Yy] ]]; then
-        if grep -q "baotx()" "$RC_FILE"; then
-            log "Wrapper already exists in $RC_FILE."
-        else
-            echo "$WRAPPER_CODE" >> "$RC_FILE"
-            log "Successfully added wrapper to $RC_FILE."
-        fi
+    if grep -qF "$MARKER_START" "$RC_FILE" 2>/dev/null; then
+        log "BaoTx integration already exists in $RC_FILE. Skipping."
     else
-        echo -e "\nSkipping automatic update. Please add the following to your shell config (e.g. $RC_FILE or your chezmoi template):"
-        echo -e "${YELLOW}------------------------------------------------------------${NC}"
-        echo "$WRAPPER_CODE"
-        echo -e "${YELLOW}------------------------------------------------------------${NC}"
+        # Fallback check for the function name to avoid double definitions if markers are missing
+        if grep -q "baotx()" "$RC_FILE" 2>/dev/null; then
+             log "A 'baotx()' function was detected in $RC_FILE, but markers are missing."
+             log "Skipping automatic update to avoid conflicts."
+        else
+            echo "BaoTx needs a wrapper function to set environment variables in your current shell."
+            read -p "Automatically append wrapper to $RC_FILE? (y/n): " confirm_rc
+            if [[ "$confirm_rc" =~ ^[Yy] ]]; then
+                echo "$WRAPPER_CODE" >> "$RC_FILE"
+                log "Successfully added wrapper to $RC_FILE."
+            else
+                echo -e "\nSkipping automatic update. Please add the following to your shell config (e.g. $RC_FILE or your chezmoi template):"
+                echo -e "${YELLOW}------------------------------------------------------------${NC}"
+                echo "$WRAPPER_CODE"
+                echo -e "${YELLOW}------------------------------------------------------------${NC}"
+            fi
+        fi
     fi
 fi
 

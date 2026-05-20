@@ -238,6 +238,7 @@ cmd_ns() { cmd_namespace "$@"; }
 # DESC: Forces a login for a cluster (defaults to current)
 cmd_login() {
     local selected="${1:-}"
+    local method="${2:-}"
     
     # If no argument, try to get the current cluster
     if [[ -z "$selected" ]]; then
@@ -248,19 +249,27 @@ cmd_login() {
         _error "No cluster specified and no current cluster set. Use 'baotx select' first."
     fi
     
-    _perform_switch "$selected" 1
+    _perform_switch "$selected" 1 "$method"
 }
 
 # Internal function for switching and login logic
 _perform_switch() {
     local selected="$1"
     local force_login="$2"
+    local override_method="${3:-}"
     local addr login_method token exp_token cli_tool ns
     
     addr=$(_get_config ".clusters.\"$selected\".address")
     if [[ "$addr" == "null" ]]; then _error "Cluster \"$selected\" not found."; fi
     
-    login_method=$(_get_config ".clusters.\"$selected\".login")
+    # Logic to handle login as a string or a list
+    if [[ -n "$override_method" ]]; then
+        login_method="$override_method"
+    else
+        # yq query: if it's a sequence, take the first element, otherwise take the value
+        login_method=$(_get_config "(.clusters.\"$selected\".login | (select(tag == \"!!seq\") | .[0]) // .)")
+    fi
+
     token=$(_get_config ".clusters.\"$selected\".token")
     exp_token=$(_get_config ".clusters.\"$selected\".expire_token")
     ns=$(_get_config ".clusters.\"$selected\".namespace")
