@@ -69,8 +69,9 @@ fi
 chmod +x "$INSTALL_DIR/baotx"
 
 # 4. Initialize Config
-if [ ! -f "$HOME/.baoconfig.yaml" ]; then
-    read -p "Create initial config at ~/.baoconfig.yaml? (y/n): " init_cfg
+CONFIG_FILE="${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
+if [ ! -f "$CONFIG_FILE" ]; then
+    read -p "Create initial config at $CONFIG_FILE? (y/n): " init_cfg
     if [[ "$init_cfg" =~ ^[Yy] ]]; then
         "$INSTALL_DIR/baotx" init
     fi

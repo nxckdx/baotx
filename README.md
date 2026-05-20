@@ -82,7 +82,17 @@ source <(baotx completion zsh)
 
 ## Configuration
 
-The configuration is stored in `~/.baoconfig.yaml`. Example:
+By default, the configuration is stored in `~/.baoconfig.yaml`.
+
+### Custom Configuration Path
+
+You can override the default configuration path by setting the `BAOTX_CONFIG` environment variable in your `.zshrc` or `.bashrc`:
+
+```bash
+export BAOTX_CONFIG="$HOME/my-baotx-config.yaml"
+```
+
+### Example Config
 
 ```yaml
 cli_tool: "bao" # or "vault"

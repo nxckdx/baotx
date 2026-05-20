@@ -79,9 +79,12 @@ cmd_help() {
         fi
     done
     _log ""
+    _log "Environment Variables:"
+    _log "  BAOTX_CONFIG    Path to the config file (default: \$HOME/.baoconfig.yaml)"
+    _log ""
 }
 
-# DESC: Creates a .baoconfig.yaml template
+# DESC: Creates a configuration template
 cmd_init() {
     if [[ -f "$CONFIG_FILE" ]]; then
         _error "Configuration file $CONFIG_FILE already exists!"
