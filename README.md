@@ -186,3 +186,14 @@ style = "bold yellow"
 ## Future Ideas & Contributing
 
 Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
+
+Some ideas for future versions:
+
+- **Exec-Wrapper (`baotx exec`):** Run a single command within a specific cluster context without modifying your current shell environment.
+- **Async Cluster Health-Check:** Show reachability (online/offline status) in the `fzf` selection menu using an asynchronous background check.
+- **Context & Namespace History:** Support for switching back to the previous context or namespace (e.g., `baotx select -`).
+- **Self-Update (`baotx update`):** Easy update mechanism to the latest SemVer release from GitHub.
+- **Environment Export:** Export context variables to different formats like `.env` for use in CI/CD or local development.
+- **Cluster Aliases:** Define short names for clusters (e.g., `p` for `production`) for faster switching.
+- **Hook-Scripts:** Support for pre- and post-switch scripts to automate tasks like connecting to a VPN.
+- **Multi-File Config:** Support merging multiple configuration files (like `KUBECONFIG`).
