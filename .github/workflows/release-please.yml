@@ -16,5 +16,18 @@ jobs:
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
-          # Configuration is loaded from release-please-config.json
-          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: node
+          package-name: baotx
+
+      # Wenn der Bot einen Release-PR erstellt oder aktualisiert,
+      # müssen wir die Version im baotx Skript synchronisieren.
+      - name: Sync version to baotx
+        if: ${{ steps.release.outputs.pr }}
+        run: |
+          VERSION=$(jq -r .version package.json)
+          sed -i "s/VERSION=\".*\"/VERSION=\"$VERSION\"/" baotx
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add baotx
+          git commit --amend --no-edit || git commit -m "chore: sync version to baotx"
+          git push --force
