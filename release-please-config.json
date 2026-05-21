@@ -4,14 +4,7 @@
     ".": {
       "release-type": "simple",
       "extra-files": [
-        {
-          "type": "regex",
-          "path": "baotx",
-          "updater": {
-            "search": "readonly VERSION=\"[^\"]+\"",
-            "replace": "readonly VERSION=\"{{version}}\""
-          }
-        }
+        "baotx"
       ]
     }
   }
