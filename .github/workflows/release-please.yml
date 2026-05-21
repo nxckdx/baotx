@@ -21,10 +21,11 @@ jobs:
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
-          release-type: node
+          release-type: simple
           package-name: baotx
+          version-file: VERSION
 
-      # Step 3: Sync version in the Pull Request branch
+      # Step 3: Update version in the baotx file in the PR branch
       - name: Sync version to baotx PR
         if: ${{ steps.release.outputs.pr }}
         run: |
@@ -32,31 +33,26 @@ jobs:
           git fetch origin $PR_BRANCH
           git checkout $PR_BRANCH
           
-          # Use the version output from release-please
-          VERSION="${{ steps.release.outputs.version }}"
-          if [ -n "$VERSION" ] && [ "$VERSION" != "null" ]; then
-            sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/" baotx
-            
-            git config user.name github-actions
-            git config user.email github-actions@github.com
-            git add baotx
-            git commit -m "chore: sync version to baotx" || echo "No changes to commit"
-            git push origin $PR_BRANCH
-          fi
+          NEW_VERSION=$(cat VERSION)
+          sed -i "s/^VERSION=.*/VERSION=\"$NEW_VERSION\"/" baotx
+          
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add baotx
+          git commit -m "chore: sync version to baotx" || echo "No changes"
+          git push origin $PR_BRANCH
 
-      # Step 4: Ensure the uploaded asset has the correct version
+      # Step 4: Upload the asset with the correct version
       - name: Upload Release Asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use the version output from release-please
-          VERSION="${{ steps.release.outputs.version }}"
-          if [ -z "$VERSION" ] || [ "$VERSION" == "null" ]; then
-            # Fallback to tag name if version is not set
-            TAG_NAME="${{ steps.release.outputs.tag_name }}"
-            VERSION="${TAG_NAME#v}"
-          fi
+          # Ensure the file has the version from the tag
+          TAG_NAME="${{ steps.release.outputs.tag_name }}"
+          V_NUMBER="${TAG_NAME#v}"
           
-          sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/" baotx
-          gh release upload "${{ steps.release.outputs.tag_name }}" baotx --clobber
+          sed -i "s/^VERSION=.*/VERSION=\"$V_NUMBER\"/" baotx
+          
+          echo "Uploading baotx version $V_NUMBER"
+          gh release upload "$TAG_NAME" baotx --clobber
