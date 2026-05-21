@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/nxckdx/baotx/compare/v1.0.2...v1.0.3) (2026-05-21)
+
+
+### Bug Fixes
+
+* add baotx in github-release ([848ca6a](https://github.com/nxckdx/baotx/commit/848ca6a1f099a7681df70d555d73680408e56cd8))
+
 ## [1.0.2](https://github.com/nxckdx/baotx/compare/v1.0.1...v1.0.2) (2026-05-21)
 
 
