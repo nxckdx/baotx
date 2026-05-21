@@ -246,12 +246,12 @@ cmd_update() {
         # Download to a temp file first
         local tmp_bin
         tmp_bin=$(mktemp)
-        if curl -sSL "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/baotx" -o "$tmp_bin"; then
+        if curl -sSLf "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/baotx" -o "$tmp_bin"; then
             chmod +x "$tmp_bin"
             mv "$tmp_bin" "$SCRIPT_PATH"
             _log "Update successful! Please restart your shell."
         else
-            _error "Download failed."
+            _error "Download failed. The release asset might not be available yet."
         fi
     fi
 }
