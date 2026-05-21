@@ -50,17 +50,25 @@ Add the following to your `~/.zshrc`:
 # !! Contents within this block are managed by baotx !!
 baotx() {
     local out
+    # For 'exec' and 'completion', we run the command directly without capturing output.
+    # This ensures interactivity and prevents issues with large output.
+    if [[ "$1" == "exec" || "$1" == "completion" ]]; then
+        command baotx "$@"
+        return $?
+    fi
+    
     out=$(command baotx "$@")
     local ret=$?
-    if [[ "$1" == "completion" ]]; then
-        echo "$out"
-    elif [[ -n "$out" ]]; then
+    if [[ -n "$out" ]]; then
+        if [[ "$*" == *"--format=env"* ]]; then
+            echo "$out"
+        fi
         eval "$out"
     fi
     return $ret
 }
 baotx load 2>/dev/null
-source <(baotx completion zsh 2>/dev/null || baotx completion bash 2>/dev/null)
+source <(command baotx completion zsh 2>/dev/null || command baotx completion bash 2>/dev/null)
 # <<< baotx initialize <<<
 ```
 
@@ -70,10 +78,11 @@ source <(baotx completion zsh 2>/dev/null || baotx completion bash 2>/dev/null)
 | :--- | :--- |
 | `baotx select` | Open `fzf` to select a cluster from your config. |
 | `baotx select <name>` | Switch directly to a specific cluster. |
+| `baotx exec <name> -- <cmd>` | Run a single command in a specific cluster context. |
 | `baotx ns` | Select a namespace for the current cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
-| `baotx status` | Show the current cluster, address, and token TTL. |
+| `baotx status` | Show the current cluster, address, and token TTL. Use `--format=env` to export variables. |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
 
@@ -107,11 +116,16 @@ storage_identity: "~/.ssh/id_ed25519" # optional
 
 ### Custom Configuration Path
 
-You can override the default configuration path by setting the `BAOTX_CONFIG` environment variable in your `.zshrc` or `.bashrc`:
+You can override the default configuration path by setting the `BAOTX_CONFIG` environment variable. BaoTx supports **multiple configuration files** (similar to `KUBECONFIG`) by separating paths with a colon:
 
 ```bash
-export BAOTX_CONFIG="$HOME/my-baotx-config.yaml"
+export BAOTX_CONFIG="$HOME/.baoconfig.yaml:$HOME/projects/work/.baotx.yaml"
 ```
+
+**Key rules for multi-file configs:**
+- **Precedence:** If multiple files contain a cluster with the same name, the definition in the **first** file takes precedence.
+- **Write Operations:** Any commands that modify the configuration (like `baotx select`, `baotx login`, or `baotx ns`) will always write their changes to the **first** file in the list.
+- **Merging:** BaoTx transparently merges all clusters and aliases from all files for use in `fzf` selection and autocompletion.
 
 ### Example Config
 
@@ -189,11 +203,6 @@ Contributions are welcome! If you have an idea or want to tackle one of the poin
 
 Some ideas for future versions:
 
-- **Exec-Wrapper (`baotx exec`):** Run a single command within a specific cluster context without modifying your current shell environment.
-- **Async Cluster Health-Check:** Show reachability (online/offline status) in the `fzf` selection menu using an asynchronous background check.
 - **Context & Namespace History:** Support for switching back to the previous context or namespace (e.g., `baotx select -`).
 - **Self-Update (`baotx update`):** Easy update mechanism to the latest SemVer release from GitHub.
-- **Environment Export:** Export context variables to different formats like `.env` for use in CI/CD or local development.
-- **Cluster Aliases:** Define short names for clusters (e.g., `p` for `production`) for faster switching.
 - **Hook-Scripts:** Support for pre- and post-switch scripts to automate tasks like connecting to a VPN.
-- **Multi-File Config:** Support merging multiple configuration files (like `KUBECONFIG`).

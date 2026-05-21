@@ -97,23 +97,31 @@ fi
 MARKER_START="# >>> baotx initialize >>>"
 MARKER_END="# <<< baotx initialize <<<"
 
-WRAPPER_CODE=$(cat << EOF
+WRAPPER_CODE=$(cat << 'EOF'
 
 $MARKER_START
 # !! Contents within this block are managed by baotx !!
 baotx() {
     local out
-    out=\$(command baotx "\$@")
-    local ret=\$?
-    if [[ "\$1" == "completion" ]]; then
-        echo "\$out"
-    elif [[ -n "\$out" ]]; then
-        eval "\$out"
+    # For 'exec' and 'completion', we run the command directly without capturing output.
+    # This ensures interactivity and prevents issues with large output.
+    if [[ "$1" == "exec" || "$1" == "completion" ]]; then
+        command baotx "$@"
+        return $?
     fi
-    return \$ret
+    
+    out=$(command baotx "$@")
+    local ret=$?
+    if [[ -n "$out" ]]; then
+        if [[ "$*" == *"--format=env"* ]]; then
+            echo "$out"
+        fi
+        eval "$out"
+    fi
+    return $ret
 }
 baotx load 2>/dev/null
-source <(baotx completion zsh 2>/dev/null || baotx completion bash 2>/dev/null)
+source <(command baotx completion zsh 2>/dev/null || command baotx completion bash 2>/dev/null)
 $MARKER_END
 EOF
 )
@@ -131,7 +139,30 @@ if [ -n "$RC_FILE" ]; then
     echo -e "\n${YELLOW}Shell Integration:${NC}"
     
     if grep -qF "$MARKER_START" "$RC_FILE" 2>/dev/null; then
-        log "BaoTx integration already exists in $RC_FILE. Skipping."
+        # Check if the content between markers matches
+        # We extract the part from the file including markers for easier comparison
+        EXISTING_BLOCK=$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$RC_FILE")
+        
+        # Trim leading/trailing whitespace for comparison
+        CLEAN_EXISTING=$(echo "$EXISTING_BLOCK" | xargs)
+        CLEAN_NEW=$(echo "$WRAPPER_CODE" | xargs)
+
+        if [ "$CLEAN_EXISTING" = "$CLEAN_NEW" ]; then
+            log "BaoTx integration in $RC_FILE is already up to date."
+        else
+            warn "BaoTx integration in $RC_FILE is outdated."
+            read -p "Do you want to update it now? (y/n): " update_confirm
+            if [[ "$update_confirm" =~ ^[Yy] ]]; then
+                # Use a temp file for safe replacement
+                TMP_RC=$(mktemp)
+                # Remove the old block and append the new one
+                sed "/$MARKER_START/,/$MARKER_END/d" "$RC_FILE" > "$TMP_RC"
+                echo "$WRAPPER_CODE" >> "$TMP_RC"
+                cat "$TMP_RC" > "$RC_FILE"
+                rm "$TMP_RC"
+                log "Successfully updated wrapper in $RC_FILE."
+            fi
+        fi
     else
         # Fallback check for the function name to avoid double definitions if markers are missing
         if grep -q "baotx()" "$RC_FILE" 2>/dev/null; then
