@@ -5,7 +5,7 @@ set -eo pipefail
 # This script installs baotx and optionally configures your shell.
 
 REPO_URL="https://github.com/nxckdx/baotx"
-RAW_URL="https://raw.githubusercontent.com/nxckdx/baotx/main/baotx"
+RELEASE_URL="https://github.com/nxckdx/baotx/releases/latest/download/baotx"
 
 # Colors
 RED='\033[0;31m'
@@ -78,9 +78,11 @@ fi
 # 3. Download baotx
 log "Downloading baotx to $INSTALL_DIR/baotx..."
 if [ -f "baotx" ]; then
+    # If the script is run from within the repo, use the local file
     cp baotx "$INSTALL_DIR/baotx"
 else
-    curl -sSL "$RAW_URL" -o "$INSTALL_DIR/baotx"
+    # Otherwise, download the latest release
+    curl -sSL "$RELEASE_URL" -o "$INSTALL_DIR/baotx"
 fi
 chmod +x "$INSTALL_DIR/baotx"
 
@@ -99,7 +101,7 @@ MARKER_END="# <<< baotx initialize <<<"
 
 WRAPPER_CODE=$(cat << 'EOF'
 
-$MARKER_START
+# >>> baotx initialize >>>
 # !! Contents within this block are managed by baotx !!
 baotx() {
     local out
@@ -122,7 +124,7 @@ baotx() {
 }
 baotx load 2>/dev/null
 source <(command baotx completion zsh 2>/dev/null || command baotx completion bash 2>/dev/null)
-$MARKER_END
+# <<< baotx initialize <<<
 EOF
 )
 

@@ -83,6 +83,7 @@ source <(command baotx completion zsh 2>/dev/null || command baotx completion ba
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
 | `baotx status` | Show the current cluster, address, and token TTL. Use `--format=env` to export variables. |
+| `baotx update` | Check for updates and install the latest version from GitHub. |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
 
@@ -204,5 +205,4 @@ Contributions are welcome! If you have an idea or want to tackle one of the poin
 Some ideas for future versions:
 
 - **Context & Namespace History:** Support for switching back to the previous context or namespace (e.g., `baotx select -`).
-- **Self-Update (`baotx update`):** Easy update mechanism to the latest SemVer release from GitHub.
 - **Hook-Scripts:** Support for pre- and post-switch scripts to automate tasks like connecting to a VPN.
