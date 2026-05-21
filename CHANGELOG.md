@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/nxckdx/baotx/compare/v1.0.4...v1.0.5) (2026-05-21)
+
+
+### Bug Fixes
+
+* github-workflow ([9c5ad19](https://github.com/nxckdx/baotx/commit/9c5ad197819471d1f21366c0d9ca54f9b8e437a5))
+
 ## [1.0.4](https://github.com/nxckdx/baotx/compare/v1.0.3...v1.0.4) (2026-05-21)
 
 
