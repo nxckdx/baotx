@@ -31,31 +31,32 @@ jobs:
           PR_BRANCH=$(echo '${{ steps.release.outputs.pr }}' | jq -r .headBranchName)
           git fetch origin $PR_BRANCH
           git checkout $PR_BRANCH
-          git pull origin $PR_BRANCH --rebase
           
-          # Get version from the PR title or package.json
-          VERSION=$(jq -r .version package.json)
-          sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/" baotx
-          
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add baotx
-          git commit -m "chore: sync version to baotx" || echo "No changes to commit"
-          git push origin $PR_BRANCH
+          # Use the version output from release-please
+          VERSION="${{ steps.release.outputs.version }}"
+          if [ -n "$VERSION" ] && [ "$VERSION" != "null" ]; then
+            sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/" baotx
+            
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git add baotx
+            git commit -m "chore: sync version to baotx" || echo "No changes to commit"
+            git push origin $PR_BRANCH
+          fi
 
-      # Step 4: Final sync and asset upload when release is created
+      # Step 4: Ensure the uploaded asset has the correct version
       - name: Upload Release Asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use the actual tag name as the source of truth
-          TAG_NAME="${{ steps.release.outputs.tag_name }}"
-          # Strip the 'v' prefix to get the version number (v1.0.2 -> 1.0.2)
-          VERSION_NAME="${TAG_NAME#v}"
+          # Use the version output from release-please
+          VERSION="${{ steps.release.outputs.version }}"
+          if [ -z "$VERSION" ] || [ "$VERSION" == "null" ]; then
+            # Fallback to tag name if version is not set
+            TAG_NAME="${{ steps.release.outputs.tag_name }}"
+            VERSION="${TAG_NAME#v}"
+          fi
           
-          # Force update the version in the file before uploading
-          sed -i "s/^VERSION=.*/VERSION=\"$VERSION_NAME\"/" baotx
-          
-          # Upload the patched file as a release asset
-          gh release upload "$TAG_NAME" baotx --clobber
+          sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/" baotx
+          gh release upload "${{ steps.release.outputs.tag_name }}" baotx --clobber
