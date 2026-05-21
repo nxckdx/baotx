@@ -21,38 +21,14 @@ jobs:
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
-          release-type: simple
-          package-name: baotx
-          version-file: VERSION
+          # The action will automatically find release-please-config.json
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Update version in the baotx file in the PR branch
-      - name: Sync version to baotx PR
-        if: ${{ steps.release.outputs.pr }}
-        run: |
-          PR_BRANCH=$(echo '${{ steps.release.outputs.pr }}' | jq -r .headBranchName)
-          git fetch origin $PR_BRANCH
-          git checkout $PR_BRANCH
-          
-          NEW_VERSION=$(cat VERSION)
-          sed -i "s/^VERSION=.*/VERSION=\"$NEW_VERSION\"/" baotx
-          
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add baotx
-          git commit -m "chore: sync version to baotx" || echo "No changes"
-          git push origin $PR_BRANCH
-
-      # Step 4: Upload the asset with the correct version
+      # Step 3: Upload the asset when a release is created
       - name: Upload Release Asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Ensure the file has the version from the tag
-          TAG_NAME="${{ steps.release.outputs.tag_name }}"
-          V_NUMBER="${TAG_NAME#v}"
-          
-          sed -i "s/^VERSION=.*/VERSION=\"$V_NUMBER\"/" baotx
-          
-          echo "Uploading baotx version $V_NUMBER"
-          gh release upload "$TAG_NAME" baotx --clobber
+          # The file 'baotx' was already updated by the bot before the release
+          gh release upload "${{ steps.release.outputs.tag_name }}" baotx --clobber
