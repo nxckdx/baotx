@@ -13,21 +13,34 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # 1. Repository auschecken, damit package.json und baotx sichtbar sind
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Release Please ausführen
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
           release-type: node
           package-name: baotx
 
-      # Wenn der Bot einen Release-PR erstellt oder aktualisiert,
-      # müssen wir die Version im baotx Skript synchronisieren.
+      # 3. Version synchronisieren, wenn ein Release-PR erstellt wurde
       - name: Sync version to baotx
         if: ${{ steps.release.outputs.pr }}
         run: |
+          # Den Branch des Release-PRs auschecken
+          PR_BRANCH=$(echo '${{ steps.release.outputs.pr }}' | jq -r .headBranchName)
+          git checkout $PR_BRANCH
+          
+          # Version aus package.json lesen und in baotx schreiben
           VERSION=$(jq -r .version package.json)
           sed -i "s/VERSION=\".*\"/VERSION=\"$VERSION\"/" baotx
+          
+          # Änderungen pushen
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add baotx
-          git commit --amend --no-edit || git commit -m "chore: sync version to baotx"
-          git push --force
+          git commit -m "chore: sync version to baotx" || echo "No changes to commit"
+          git push origin $PR_BRANCH
