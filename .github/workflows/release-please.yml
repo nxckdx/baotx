@@ -13,48 +13,44 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout the repository to make files visible
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Run Release Please
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
           release-type: node
           package-name: baotx
 
-      # 3. Synchronize version if a release PR was created/updated
-      - name: Sync version to baotx
+      # Step 3: Sync version in the Pull Request branch
+      - name: Sync version to baotx PR
         if: ${{ steps.release.outputs.pr }}
         run: |
-          # Extract branch name from PR output
           PR_BRANCH=$(echo '${{ steps.release.outputs.pr }}' | jq -r .headBranchName)
-          
-          # Fetch and switch to the PR branch
           git fetch origin $PR_BRANCH
           git checkout $PR_BRANCH
-          
-          # Ensure we are up to date with the remote
           git pull origin $PR_BRANCH --rebase
           
-          # Read version from package.json and update baotx script
-          VERSION=$(jq -r .version package.json)
+          # Use the version output from release-please
+          VERSION="${{ steps.release.outputs.version }}"
           sed -i "s/VERSION=\".*\"/VERSION=\"$VERSION\"/" baotx
           
-          # Commit and push changes
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add baotx
           git commit -m "chore: sync version to baotx" || echo "No changes to commit"
           git push origin $PR_BRANCH
 
-      # 4. Upload asset to the release
+      # Step 4: Ensure the uploaded asset has the correct version
       - name: Upload Release Asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Use the tag_name or version output directly
+          VERSION="${{ steps.release.outputs.version }}"
+          sed -i "s/VERSION=\".*\"/VERSION=\"$VERSION\"/" baotx
+          
           gh release upload ${{ steps.release.outputs.tag_name }} baotx --clobber
