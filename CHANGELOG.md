@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1](https://github.com/nxckdx/baotx/compare/v1.0.0...v1.0.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* github-release in baotx file ([f329371](https://github.com/nxckdx/baotx/commit/f329371b70c73a8c7a15a25326e4e0544f0746eb))
+* github-release in baotx file ([9d2b3b6](https://github.com/nxckdx/baotx/commit/9d2b3b6ac8ba592a6c4a10ffa0d79dfb9a29298d))
+* github-release in baotx file ([7f1cc18](https://github.com/nxckdx/baotx/commit/7f1cc18f54981280c190b5a95cc38ea18cb4199f))
+* github-release in baotx file ([6672aa7](https://github.com/nxckdx/baotx/commit/6672aa791fe54af3a7a1b9341aabcd3086a0c730))
+
 ## 1.0.0 (2026-05-21)
 
 
