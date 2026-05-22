@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/nxckdx/baotx/compare/baotx-v1.1.0...baotx-v1.1.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* show version in status ([51222f1](https://github.com/nxckdx/baotx/commit/51222f1103a48698768d277cefaa16e51bd3d3f5))
+
 ## [1.1.0](https://github.com/nxckdx/baotx/compare/baotx-v1.0.7...baotx-v1.1.0) (2026-05-22)
 
 
