@@ -15,13 +15,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Wir brauchen den vollen Verlauf und Schreibrechte zum Pushen
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: google-github-actions/release-please-action@v4
         id: release
-        # The configuration is now primarily in release-please-config.json
 
-      # This step runs ONLY when a new release is actually created
-      - name: Prepare and Upload Asset
+      # Dieser Schritt läuft nur, wenn ein neues Release erstellt wurde
+      - name: Update baotx in repo and upload asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -29,14 +32,17 @@ jobs:
           TAG_NAME="${{ steps.release.outputs.tag_name }}"
           VERSION_TO_SET="${TAG_NAME#v}"
           
-          echo "Preparing asset for release $TAG_NAME (Version: $VERSION_TO_SET)"
+          echo "Syncing baotx to version $VERSION_TO_SET..."
           
-          # The file should already be updated by release-please in the merged PR,
-          # but we keep this as a secondary safety measure for the uploaded asset.
+          # 1. Datei im Runner patchen
           sed -i "s/^VERSION=.*/VERSION=\"$VERSION_TO_SET\"/" baotx
           
-          # Verify the version in the asset
-          grep "^VERSION=" baotx
+          # 2. Änderung zurück ins Repository pushen
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add baotx
+          git commit -m "chore: update version in baotx to $VERSION_TO_SET [skip ci]"
+          git push origin main
           
-          # Upload the script as a release asset
+          # 3. Asset zum Release hochladen
           gh release upload "$TAG_NAME" baotx --clobber

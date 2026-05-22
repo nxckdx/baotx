@@ -5,15 +5,7 @@
       "release-type": "node",
       "version-file": "VERSION",
       "extra-files": [
-        "package.json",
-        {
-          "type": "regex",
-          "path": "baotx",
-          "updater": {
-            "search": "VERSION=\"[^\"]*\"",
-            "replace": "VERSION=\"{{version}}\""
-          }
-        }
+        "package.json"
       ]
     }
   }
