@@ -5,7 +5,7 @@ set -eo pipefail
 # Refactored for dynamic subcommands
 
 # Handle multiple config files (like KUBECONFIG)
-VERSION="1.0.5"
+VERSION="1.0.7"
 readonly VERSION
 IFS=':' read -ra CONFIG_FILES <<< "${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
 readonly PRIMARY_CONFIG="${CONFIG_FILES[0]}"

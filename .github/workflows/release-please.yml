@@ -18,10 +18,7 @@ jobs:
 
       - uses: google-github-actions/release-please-action@v4
         id: release
-        with:
-          release-type: simple
-          version-file: VERSION
-          package-name: baotx
+        # The configuration is now primarily in release-please-config.json
 
       # This step runs ONLY when a new release is actually created
       - name: Prepare and Upload Asset
@@ -29,19 +26,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Get the version from the tag (the most reliable source)
-          # Example: tag_name is v1.0.6 -> VERSION_TO_SET is 1.0.6
           TAG_NAME="${{ steps.release.outputs.tag_name }}"
           VERSION_TO_SET="${TAG_NAME#v}"
           
           echo "Preparing asset for release $TAG_NAME (Version: $VERSION_TO_SET)"
           
-          # 2. Force-patch the version into the baotx script
-          # We use a very specific sed to find the VERSION= line
+          # The file should already be updated by release-please in the merged PR,
+          # but we keep this as a secondary safety measure for the uploaded asset.
           sed -i "s/^VERSION=.*/VERSION=\"$VERSION_TO_SET\"/" baotx
           
-          # 3. Verify it worked (for the logs)
+          # Verify the version in the asset
           grep "^VERSION=" baotx
           
-          # 4. Upload to the release (clobber replaces if already exists)
+          # Upload the script as a release asset
           gh release upload "$TAG_NAME" baotx --clobber

@@ -2,10 +2,18 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
-      "release-type": "simple",
+      "release-type": "node",
       "version-file": "VERSION",
       "extra-files": [
-        "baotx"
+        "package.json",
+        {
+          "type": "regex",
+          "path": "baotx",
+          "updater": {
+            "search": "VERSION=\"[^\"]*\"",
+            "replace": "VERSION=\"{{version}}\""
+          }
+        }
       ]
     }
   }
