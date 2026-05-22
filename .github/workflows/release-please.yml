@@ -16,33 +16,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Wir brauchen den vollen Verlauf und Schreibrechte zum Pushen
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: google-github-actions/release-please-action@v4
         id: release
 
-      # Dieser Schritt läuft nur, wenn ein neues Release erstellt wurde
       - name: Update baotx in repo and upload asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ steps.release.outputs.tag_name }}"
-          VERSION_TO_SET="${TAG_NAME#v}"
-          
+          VERSION_TO_SET="${TAG_NAME#*-v}"
+
           echo "Syncing baotx to version $VERSION_TO_SET..."
-          
-          # 1. Datei im Runner patchen
+
           sed -i "s/^VERSION=.*/VERSION=\"$VERSION_TO_SET\"/" baotx
-          
-          # 2. Änderung zurück ins Repository pushen
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add baotx
           git commit -m "chore: update version in baotx to $VERSION_TO_SET [skip ci]"
           git push origin main
-          
-          # 3. Asset zum Release hochladen
+
           gh release upload "$TAG_NAME" baotx --clobber
