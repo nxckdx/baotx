@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/nxckdx/baotx/compare/baotx-v1.1.1...baotx-v1.1.2) (2026-05-22)
+
+
+### Bug Fixes
+
+* pipeline workflow ([7a166e7](https://github.com/nxckdx/baotx/commit/7a166e718d0403085332d4cdabbdd67a5b47a532))
+
 ## [1.1.1](https://github.com/nxckdx/baotx/compare/baotx-v1.1.0...baotx-v1.1.1) (2026-05-22)
 
 
