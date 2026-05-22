@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ steps.release.outputs.tag_name }}"
-          VERSION_TO_SET="${TAG_NAME#*-v}"
+          VERSION_TO_SET="${TAG_NAME#v}"
 
           echo "Syncing baotx to version $VERSION_TO_SET..."
 
