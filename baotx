@@ -344,6 +344,7 @@ cmd_status() {
         ns=$(_get_config ".clusters.\"$cur\".namespace")
         token=$(_retrieve_token "$cur")
         _log "--- BaoTx Status ---"
+        _log "Version:   ${VERSION}"
         _log "Cluster:   $cur"
         _log "Address:   $addr"
         [[ -n "$ns" && "$ns" != "null" ]] && _log "Namespace: $ns"
