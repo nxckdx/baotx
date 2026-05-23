@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/nxckdx/baotx/compare/baotx-v1.3.3...baotx-v1.4.0) (2026-05-23)
+
+
+### Features
+
+* add history, hooks, cluster-env vars and simplified init ([b22f025](https://github.com/nxckdx/baotx/commit/b22f025e9411449e99474cc9327787403dd08c7b))
+
 ## [1.3.3](https://github.com/nxckdx/baotx/compare/baotx-v1.3.2...baotx-v1.3.3) (2026-05-23)
 
 
