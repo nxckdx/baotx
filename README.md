@@ -66,6 +66,7 @@ eval "$(baotx init bash)"
 | `baotx ns -` | Switch back to the previous namespace for this cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
+| `baotx renew` | Renew the current token lease. |
 | `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output, `--policies` to see policy details, or `--all` for all clusters. |
 | `baotx update` | Check for updates and install the latest version from GitHub. |
 | `baotx clear` | Unset all environment variables and clear context. |
@@ -76,21 +77,37 @@ eval "$(baotx init bash)"
 BaoTx supports pre- and post-command hooks. If you want to automate tasks (like connecting to a VPN before selecting a cluster or refreshing a local cache after login), you can place executable scripts in the data directory: `~/.local/share/baotx/`.
 
 **Naming Convention:**
-- `pre_<command>.sh`: Executed before the command. If it exits with a non-zero status, BaoTx will abort the command.
-- `post_<command>.sh`: Executed after the command.
+- `pre_<command>.sh`: Executed before the command (Global).
+- `post_<command>.sh`: Executed after the command (Global).
+- `<cluster>/pre_<command>.sh`: Executed before the command only for a specific cluster.
+- `<cluster>/post_<command>.sh`: Executed after the command only for a specific cluster.
+
+If both a global and a cluster-specific hook exist, **both** will be executed (cluster-specific first). If a `pre`-hook exits with a non-zero status, BaoTx will abort the command.
 
 **Example:**
-To run a script before `baotx select`, create `~/.local/share/baotx/pre_select.sh`:
+To run a script before `baotx select` only for the `prod` cluster, create `~/.local/share/baotx/prod/pre_select.sh`:
 ```bash
 #!/bin/bash
-echo "Ensuring VPN is connected..."
-# Add your VPN check logic here
+echo "Checking production access rights..."
 ```
-Don't forget to make it executable: `chmod +x ~/.local/share/baotx/pre_select.sh`.
 
 ## Configuration
 
 By default, the configuration is stored in `~/.baoconfig.yaml`.
+
+### Cluster-specific Environment Variables
+
+You can define custom environment variables that are automatically exported when you switch to a specific cluster. These variables are also automatically unset when you switch to another cluster or clear your context.
+
+Example:
+```yaml
+clusters:
+  prod:
+    address: "https://bao.example.com"
+    env:
+      VAULT_SKIP_VERIFY: "true"
+      KUBECONFIG: "~/.kube/prod-config"
+```
 
 ### Token Storage Options
 

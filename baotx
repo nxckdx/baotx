@@ -204,18 +204,40 @@ _check_health() {
 }
 
 _export_context() {
-    local cluster="$1" addr="$2" token="$3" ns="${4:-}"
+    local cluster="$1" addr="$2" token="$3" ns="${4:-}" custom_env="${5:-}"
+    
+    # Unset previously exported custom variables to avoid leakage
+    if [[ -n "${BAOTX_VARS:-}" ]]; then
+        for var in $BAOTX_VARS; do
+            echo "unset $var"
+        done
+    fi
+
     echo "export VAULT_ADDR=\"$addr\""
     echo "export VAULT_TOKEN=\"$token\""
     echo "export BAO_ADDR=\"$addr\""
     echo "export BAO_TOKEN=\"$token\""
     echo "export BAOTX_CLUSTER=\"$cluster\""
+    
     if [[ -n "$ns" && "$ns" != "null" ]]; then
         echo "export VAULT_NAMESPACE=\"$ns\""
         echo "export BAO_NAMESPACE=\"$ns\""
     else
         echo "unset VAULT_NAMESPACE BAO_NAMESPACE"
     fi
+
+    # Export custom environment variables
+    local exported_vars=""
+    if [[ -n "$custom_env" && "$custom_env" != "null" ]]; then
+        # Parse the custom_env (which is a JSON string of the env map)
+        while IFS='=' read -r key value; do
+            if [[ -n "$key" ]]; then
+                echo "export $key=\"$value\""
+                exported_vars+="$key "
+            fi
+        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
+    fi
+    echo "export BAOTX_VARS=\"${exported_vars% }\""
 }
 
 _baotx_logo(){
@@ -230,18 +252,26 @@ _baotx_logo(){
 _run_hook() {
     local type="$1" # pre or post
     local cmd="$2"
-    shift 2
-    local hook_file="$DATA_DIR/${type}_${cmd}.sh"
+    local cluster="$3"
+    shift 3
     
-    if [[ -x "$hook_file" ]]; then
-        if ! "$hook_file" "$@" >&2; then
-            if [[ "$type" == "pre" ]]; then
-                _error "Pre-hook '$hook_file' failed with exit code $?. Aborting."
-            else
-                _log "Warning: Post-hook '$hook_file' failed with exit code $?."
+    local hook_files=()
+    # 1. Cluster-specific hook
+    [[ -n "$cluster" && "$cluster" != "null" ]] && hook_files+=("$DATA_DIR/$cluster/${type}_${cmd}.sh")
+    # 2. Global hook
+    hook_files+=("$DATA_DIR/${type}_${cmd}.sh")
+
+    for hook_file in "${hook_files[@]}"; do
+        if [[ -x "$hook_file" ]]; then
+            if ! "$hook_file" "$@" >&2; then
+                if [[ "$type" == "pre" ]]; then
+                    _error "Pre-hook '$hook_file' failed with exit code $?. Aborting."
+                else
+                    _log "Warning: Post-hook '$hook_file' failed with exit code $?."
+                fi
             fi
         fi
-    fi
+    done
 }
 
 # --- Subcommand Functions ---
@@ -363,20 +393,13 @@ cmd_status() {
         local cur
         cur=$(_get_config '.current-cluster')
         if [[ -n "$cur" && "$cur" != "null" ]]; then
-            local addr token ns
+            local addr token ns custom_env
             addr=$(_get_config ".clusters.\"$cur\".address")
             token=$(_retrieve_token "$cur")
             ns=$(_get_config ".clusters.\"$cur\".namespace")
+            custom_env=$(_get_config ".clusters.\"$cur\".env" | jq -c '.' 2>/dev/null || echo "")
             
-            echo "export VAULT_ADDR=\"$addr\""
-            echo "export VAULT_TOKEN=\"$token\""
-            echo "export BAO_ADDR=\"$addr\""
-            echo "export BAO_TOKEN=\"$token\""
-            echo "export BAOTX_CLUSTER=\"$cur\""
-            if [[ -n "$ns" && "$ns" != "null" ]]; then
-                echo "export VAULT_NAMESPACE=\"$ns\""
-                echo "export BAO_NAMESPACE=\"$ns\""
-            fi
+            _export_context "$cur" "$addr" "$token" "$ns" "$custom_env"
         fi
         return
     fi
@@ -480,13 +503,14 @@ cmd_status() {
 
 # DESC: Silently loads the current context (used for .zshrc)
 cmd_load() {
-    local cur addr token ns
+    local cur addr token ns custom_env
     cur=$(_get_config '.current-cluster')
     if [[ -n "$cur" && "$cur" != "null" ]]; then
         addr=$(_get_config ".clusters.\"$cur\".address")
         token=$(_retrieve_token "$cur")
         ns=$(_get_config ".clusters.\"$cur\".namespace")
-        _export_context "$cur" "$addr" "$token" "$ns"
+        custom_env=$(_get_config ".clusters.\"$cur\".env" | jq -c '.' 2>/dev/null || echo "")
+        _export_context "$cur" "$addr" "$token" "$ns" "$custom_env"
     fi
 }
 
@@ -499,7 +523,55 @@ cmd_clear() {
     fi
     _set_config '.current-cluster = ""'
     _log "Context cleared."
-    echo "unset VAULT_ADDR VAULT_TOKEN BAO_ADDR BAO_TOKEN BAOTX_CLUSTER VAULT_NAMESPACE BAO_NAMESPACE"
+    
+    local unset_cmd="unset VAULT_ADDR VAULT_TOKEN BAO_ADDR BAO_TOKEN BAOTX_CLUSTER VAULT_NAMESPACE BAO_NAMESPACE"
+    if [[ -n "${BAOTX_VARS:-}" ]]; then
+        for var in $BAOTX_VARS; do
+            unset_cmd+=" $var"
+        done
+        unset_cmd+=" BAOTX_VARS"
+    fi
+    echo "$unset_cmd"
+}
+
+# DESC: Renews the current token lease
+cmd_renew() {
+    local cur addr token cli_tool
+    cur=$(_get_config '.current-cluster')
+    if [[ -z "$cur" || "$cur" == "null" ]]; then
+        _error "No cluster selected. Run 'baotx select' first."
+    fi
+
+    addr=$(_get_config ".clusters.\"$cur\".address")
+    token=$(_retrieve_token "$cur")
+    cli_tool=$(_get_cli_tool)
+
+    if [[ -z "$token" || "$token" == "null" ]]; then
+        _error "Not logged into $cur. Run 'baotx login' first."
+    fi
+
+    _log "Renewing token for $cur..."
+    local renew_json dur exp_token
+    if [[ "$cli_tool" == "curl" ]]; then
+        renew_json=$(curl -s -f -X POST -H "X-Vault-Token: $token" "$addr/v1/auth/token/renew-self" 2>/dev/null || true)
+    else
+        renew_json=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token renew -format=json 2>/dev/null || true)
+    fi
+
+    if [[ -z "$renew_json" || "$renew_json" == "null" ]]; then
+        _error "Token renewal failed. You might need to re-authenticate with 'baotx login'."
+    fi
+
+    # Lease duration can be in .auth.lease_duration or top-level .lease_duration
+    dur=$(echo "$renew_json" | jq -r '(.auth.lease_duration // .lease_duration)')
+    
+    if [[ -z "$dur" || "$dur" == "null" ]]; then
+         _error "Could not determine new lease duration."
+    fi
+
+    exp_token=$(date -d "+$dur seconds" -Iseconds)
+    _set_config ".clusters.\"$cur\".expire_token = \"$exp_token\""
+    _log "Token successfully renewed. Valid until: $exp_token"
 }
 
 # DESC: Alias for clear
@@ -649,14 +721,17 @@ cmd_namespace() {
         ns_history_cmd=".clusters.\"$cur\".previous-namespace = \"$old_ns\" | "
     fi
 
+    local custom_env
+    custom_env=$(_get_config ".clusters.\"$cur\".env" | jq -c '.' 2>/dev/null || echo "")
+
     if [[ "$selected" == "root" ]]; then
         _set_config "${ns_history_cmd}del(.clusters.\"$cur\".namespace)"
         _log "Namespace cleared (root)."
-        _export_context "$cur" "$addr" "$token" ""
+        _export_context "$cur" "$addr" "$token" "" "$custom_env"
     else
         _set_config "${ns_history_cmd}.clusters.\"$cur\".namespace = \"$selected\""
         _log "Namespace set to: $selected"
-        _export_context "$cur" "$addr" "$token" "$selected"
+        _export_context "$cur" "$addr" "$token" "$selected" "$custom_env"
     fi
 }
 
@@ -747,7 +822,9 @@ _perform_switch() {
         _set_config "${history_cmd}.current-cluster = \"$selected\""
     fi
 
-    _export_context "$selected" "$addr" "$token" "$ns"
+    local custom_env
+    custom_env=$(_get_config ".clusters.\"$selected\".env" | jq -c '.' 2>/dev/null || echo "")
+    _export_context "$selected" "$addr" "$token" "$ns" "$custom_env"
 }
 
 # DESC: Runs a command in a specific cluster context
@@ -772,6 +849,8 @@ cmd_exec() {
     fi
 
     ns=$(_get_config ".clusters.\"$cluster\".namespace")
+    local custom_env
+    custom_env=$(_get_config ".clusters.\"$cluster\".env" | jq -c '.' 2>/dev/null || echo "")
 
     export VAULT_ADDR="$addr"
     export VAULT_TOKEN="$token"
@@ -781,6 +860,14 @@ cmd_exec() {
     if [[ -n "$ns" && "$ns" != "null" ]]; then
         export VAULT_NAMESPACE="$ns"
         export BAO_NAMESPACE="$ns"
+    fi
+
+    if [[ -n "$custom_env" && "$custom_env" != "null" ]]; then
+        while IFS='=' read -r key value; do
+            if [[ -n "$key" ]]; then
+                export "$key"="$value"
+            fi
+        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
     fi
 
     exec "$@"
@@ -894,9 +981,24 @@ shift || true
 if declare -F "cmd_$COMMAND" >/dev/null; then
     # Run hooks for everything except completion and load to avoid noise/recursion
     if [[ "$COMMAND" != "completion" && "$COMMAND" != "load" ]]; then
-        _run_hook "pre" "$COMMAND" "$@"
+        # Try to determine the cluster context for the hook
+        hook_cluster=""
+        case "$COMMAND" in
+            select|exec|login)
+                if [[ -n "${1:-}" && "${1:-}" != "-" ]]; then
+                    hook_cluster=$(_resolve_alias "$1")
+                else
+                    hook_cluster=$(_get_config '.current-cluster')
+                fi
+                ;;
+            *)
+                hook_cluster=$(_get_config '.current-cluster')
+                ;;
+        esac
+
+        _run_hook "pre" "$COMMAND" "$hook_cluster" "$@"
         "cmd_$COMMAND" "$@"
-        _run_hook "post" "$COMMAND" "$@"
+        _run_hook "post" "$COMMAND" "$hook_cluster" "$@"
     else
         "cmd_$COMMAND" "$@"
     fi
