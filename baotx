@@ -234,7 +234,7 @@ _run_hook() {
     local hook_file="$DATA_DIR/${type}_${cmd}.sh"
     
     if [[ -x "$hook_file" ]]; then
-        if ! "$hook_file" "$@"; then
+        if ! "$hook_file" "$@" >&2; then
             if [[ "$type" == "pre" ]]; then
                 _error "Pre-hook '$hook_file' failed with exit code $?. Aborting."
             else
