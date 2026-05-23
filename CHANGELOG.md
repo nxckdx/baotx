@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/nxckdx/baotx/compare/baotx-v1.2.0...baotx-v1.3.0) (2026-05-23)
+
+
+### Features
+
+* add pre and post hooks ([18af042](https://github.com/nxckdx/baotx/commit/18af0423b01e0e0b75346ae0405adf8b77d00769))
+
 ## [1.2.0](https://github.com/nxckdx/baotx/compare/baotx-v1.1.3...baotx-v1.2.0) (2026-05-23)
 
 
