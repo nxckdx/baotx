@@ -348,20 +348,20 @@ EOF
     esac
 }
 
-# DESC: Shows current context and token TTL (use --format=env for .env output, --policies for policy details)
+# DESC: Shows current context and token TTL (use --format=env for .env output, --policies for policy details, --all for all clusters)
 cmd_status() {
-    local format="" show_policies=0
+    local format="" show_policies=0 show_all=0
     for arg in "$@"; do
         case "$arg" in
             --format=env) format="env" ;;
             --policies) show_policies=1 ;;
+            --all) show_all=1 ;;
         esac
     done
 
-    local cur
-    cur=$(_get_config '.current-cluster')
-
     if [[ "$format" == "env" ]]; then
+        local cur
+        cur=$(_get_config '.current-cluster')
         if [[ -n "$cur" && "$cur" != "null" ]]; then
             local addr token ns
             addr=$(_get_config ".clusters.\"$cur\".address")
@@ -383,60 +383,79 @@ cmd_status() {
 
     _baotx_logo
     _log ""
-    if [[ -z "$cur" || "$cur" == "null" ]]; then
-        _log "No cluster selected."
+
+    local clusters_to_show=()
+    if [[ "$show_all" -eq 1 ]]; then
+        # Get all cluster keys
+        while read -r line; do [[ -n "$line" ]] && clusters_to_show+=("$line"); done < <(_get_config '.clusters | keys[]' 2>/dev/null)
     else
+        local cur
+        cur=$(_get_config '.current-cluster')
+        if [[ -z "$cur" || "$cur" == "null" ]]; then
+            _log "No cluster selected. Use --all to see all clusters."
+            return
+        fi
+        clusters_to_show+=("$cur")
+    fi
+
+    local current_active
+    current_active=$(_get_config '.current-cluster')
+
+    for cluster in "${clusters_to_show[@]}"; do
         local addr exp ns diff hours mins token cli_tool
-        addr=$(_get_config ".clusters.\"$cur\".address")
-        exp=$(_get_config ".clusters.\"$cur\".expire_token")
-        ns=$(_get_config ".clusters.\"$cur\".namespace")
-        token=$(_retrieve_token "$cur")
+        addr=$(_get_config ".clusters.\"$cluster\".address")
+        exp=$(_get_config ".clusters.\"$cluster\".expire_token")
+        ns=$(_get_config ".clusters.\"$cluster\".namespace")
+        token=$(_retrieve_token "$cluster")
         cli_tool=$(_get_cli_tool)
 
-        _log "--- BaoTx Status ---"
-        _log "Version:   ${VERSION}"
-        _log "Cluster:   $cur"
-        _log "Address:   $addr"
-        [[ -n "$ns" && "$ns" != "null" ]] && _log "Namespace: $ns"
+        local prefix="  "
+        [[ "$cluster" == "$current_active" ]] && prefix="* "
+
+        _log "${prefix}Cluster:   $cluster"
+        _log "  Address:   $addr"
+        [[ -n "$ns" && "$ns" != "null" ]] && _log "  Namespace: $ns"
         
         if [[ -n "$token" ]]; then
             if [[ -n "$exp" && "$exp" != "null" ]]; then
                 diff=$(($(date -d "$exp" +%s) - $(date +%s)))
                 if (( diff <= 0 )); then
-                    _log "Token:     EXPIRED"
+                    _log "  Token:     EXPIRED"
                 else
                     hours=$((diff / 3600))
                     mins=$(( (diff % 3600) / 60 ))
-                    _log "Token:     Valid for ${hours}h ${mins}m"
+                    _log "  Token:     Valid for ${hours}h ${mins}m"
                 fi
             else
-                _log "Token:     Valid (no expiry set)"
+                _log "  Token:     Valid (no expiry set)"
             fi
 
-            # Policies
-            local policies=""
-            if [[ "$cli_tool" == "curl" ]]; then
-                local lookup_json
-                lookup_json=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" 2>/dev/null || true)
-                if [[ -n "$lookup_json" ]]; then
-                    policies=$(echo "$lookup_json" | jq -r '(.data.policies + (.data.identity_policies // [])) | unique | join(", ")')
+            # Policies (only if single cluster or --policies requested)
+            if [[ "$show_all" -eq 0 || "$show_policies" -eq 1 ]]; then
+                local policies=""
+                if [[ "$cli_tool" == "curl" ]]; then
+                    local lookup_json
+                    lookup_json=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" 2>/dev/null || true)
+                    if [[ -n "$lookup_json" ]]; then
+                        policies=$(echo "$lookup_json" | jq -r '(.data.policies + (.data.identity_policies // [])) | unique | join(", ")')
+                    fi
+                else
+                    local lookup_json
+                    lookup_json=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup -format=json 2>/dev/null || true)
+                    if [[ -n "$lookup_json" ]]; then
+                        policies=$(echo "$lookup_json" | jq -r '(.data.policies + (.data.identity_policies // [])) | unique | join(", ")')
+                    fi
                 fi
-            else
-                local lookup_json
-                lookup_json=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup -format=json 2>/dev/null || true)
-                if [[ -n "$lookup_json" ]]; then
-                    policies=$(echo "$lookup_json" | jq -r '(.data.policies + (.data.identity_policies // [])) | unique | join(", ")')
-                fi
+                [[ -z "$policies" || "$policies" == "null" ]] && policies="unknown"
+                _log "  Policies:  $policies"
             fi
-            [[ -z "$policies" || "$policies" == "null" ]] && policies="unknown"
-            _log "Policies:  $policies"
 
             if [[ "$show_policies" -eq 1 ]]; then
-                _log "\n--- Policy Details (excluding 'default') ---"
+                _log "  --- Policy Details (excluding 'default') ---"
                 local policy_list
                 policy_list=$(echo "$policies" | tr -d ',' | tr ' ' '\n' | grep -v "^default$" || true)
                 for p in $policy_list; do
-                    _log "\n[ Policy: $p ]"
+                    _log "  [ Policy: $p ]"
                     local content=""
                     if [[ "$cli_tool" == "curl" ]]; then
                         content=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/sys/policies/acl/$p" | jq -r '.data.policy' 2>/dev/null || true)
@@ -445,16 +464,18 @@ cmd_status() {
                     fi
 
                     if [[ -n "$content" ]]; then
-                        echo "$content" >&2
+                        # Indent policy content
+                        echo "$content" | sed 's/^/    /' >&2
                     else
-                        _log "(Access denied or empty)"
+                        _log "    (Access denied or empty)"
                     fi
                 done
             fi
         else
-            _log "Token:     NOT LOGGED IN"
+            _log "  Token:     NOT LOGGED IN"
         fi
-    fi
+        _log ""
+    done
 }
 
 # DESC: Silently loads the current context (used for .zshrc)
@@ -813,7 +834,7 @@ _baotx_completion() {
                 ;;
             status)
                 local -a flags
-                flags=('--format=env:Output environment variables' '--policies:Show policy details')
+                flags=('--format=env:Output environment variables' '--policies:Show policy details' '--all:Show status of all clusters')
                 _describe -t flags 'flags' flags
                 ;;
             set-cli)
@@ -852,7 +873,7 @@ EOF
     fi
     case "$prev" in
         login|select|namespace|ns|exec) COMPREPLY=( $(compgen -W "$clusters" -- "$cur") ); return 0 ;;
-        status) COMPREPLY=( $(compgen -W "--format=env --policies" -- "$cur") ); return 0 ;;
+        status) COMPREPLY=( $(compgen -W "--format=env --policies --all" -- "$cur") ); return 0 ;;
         set-cli) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
     esac
 }
