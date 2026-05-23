@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/nxckdx/baotx/compare/baotx-v1.3.0...baotx-v1.3.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* rewrite baotx init command and put one-liner in .zshrc or .bashrc ([826e33f](https://github.com/nxckdx/baotx/commit/826e33ff865da9bcf1984230d05f07c9d5b90da0))
+
 ## [1.3.0](https://github.com/nxckdx/baotx/compare/baotx-v1.2.0...baotx-v1.3.0) (2026-05-23)
 
 
