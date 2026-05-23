@@ -66,7 +66,7 @@ eval "$(baotx init bash)"
 | `baotx ns -` | Switch back to the previous namespace for this cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
-| `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output or `--policies` to see policy details. |
+| `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output, `--policies` to see policy details, or `--all` for all clusters. |
 | `baotx update` | Check for updates and install the latest version from GitHub. |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
@@ -202,4 +202,3 @@ style = "bold yellow"
 ## Future Ideas & Contributing
 
 Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
-
