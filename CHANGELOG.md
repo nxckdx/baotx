@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/nxckdx/baotx/compare/baotx-v1.3.1...baotx-v1.3.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* hook scripts with echo and eval ([45c8021](https://github.com/nxckdx/baotx/commit/45c8021ecb924ee5eb5782ede53d84cbeb1fcc0a))
+
 ## [1.3.1](https://github.com/nxckdx/baotx/compare/baotx-v1.3.0...baotx-v1.3.1) (2026-05-23)
 
 
