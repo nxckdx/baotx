@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/nxckdx/baotx/compare/baotx-v1.1.3...baotx-v1.2.0) (2026-05-23)
+
+
+### Features
+
+* add context and namespace history ([4a59907](https://github.com/nxckdx/baotx/commit/4a59907d65ca070ca9ba7ea0f13098e88784225d))
+* add context and namespace history ([a114fb7](https://github.com/nxckdx/baotx/commit/a114fb7a03e4608c8d7804628056a652e848e837))
+
 ## [1.1.3](https://github.com/nxckdx/baotx/compare/baotx-v1.1.2...baotx-v1.1.3) (2026-05-22)
 
 
