@@ -78,8 +78,11 @@ source <(command baotx completion zsh 2>/dev/null || command baotx completion ba
 | :--- | :--- |
 | `baotx select` | Open `fzf` to select a cluster from your config. |
 | `baotx select <name>` | Switch directly to a specific cluster. |
+| `baotx select -` | Switch back to the previous cluster. |
 | `baotx exec <name> -- <cmd>` | Run a single command in a specific cluster context. |
-| `baotx ns` | Select a namespace for the current cluster. |
+| `baotx ns` | Select a namespace for the current cluster via `fzf`. |
+| `baotx ns <name>` | Switch directly to a specific namespace. |
+| `baotx ns -` | Switch back to the previous namespace for this cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
 | `baotx status` | Show the current cluster, address, and token TTL. Use `--format=env` to export variables. |
@@ -204,5 +207,4 @@ Contributions are welcome! If you have an idea or want to tackle one of the poin
 
 Some ideas for future versions:
 
-- **Context & Namespace History:** Support for switching back to the previous context or namespace (e.g., `baotx select -`).
 - **Hook-Scripts:** Support for pre- and post-switch scripts to automate tasks like connecting to a VPN.

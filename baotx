@@ -407,6 +407,13 @@ cmd_select() {
     local cli_tool clusters
     cli_tool=$(_get_cli_tool)
 
+    if [[ "$selected" == "-" ]]; then
+        selected=$(_get_config '.previous-cluster // ""')
+        if [[ -z "$selected" || "$selected" == "null" ]]; then
+            _error "No previous cluster found."
+        fi
+    fi
+
     if [[ -z "$selected" ]]; then
         # We use a temporary file to store health results to avoid blocking fzf
         local health_tmp
@@ -481,6 +488,14 @@ cmd_namespace() {
         _error "No cluster selected. Run 'baotx select' first."
     fi
 
+    selected="${1:-}"
+    if [[ "$selected" == "-" ]]; then
+        selected=$(_get_config ".clusters.\"$cur\".previous-namespace // \"\"")
+        if [[ -z "$selected" || "$selected" == "null" ]]; then
+            _error "No previous namespace found for cluster $cur."
+        fi
+    fi
+
     # Check if we need a login, but don't force a switch/export yet
     cli_tool=$(_get_cli_tool)
     addr=$(_get_config ".clusters.\"$cur\".address")
@@ -499,26 +514,36 @@ cmd_namespace() {
         token=$(_get_config ".clusters.\"$cur\".token")
     fi
 
-    _log "Fetching namespaces from $cur..."
-    
-    if [[ "$cli_tool" == "curl" ]]; then
-        namespaces=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/sys/namespaces?list=true" | jq -r '.data.keys[]' 2>/dev/null || true)
-    else
-        namespaces=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" VAULT_NAMESPACE="" "$cli_tool" namespace list -format=json 2>/dev/null | jq -r '.[]' 2>/dev/null || true)
+    if [[ -z "$selected" ]]; then
+        _log "Fetching namespaces from $cur..."
+        
+        if [[ "$cli_tool" == "curl" ]]; then
+            namespaces=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/sys/namespaces?list=true" | jq -r '.data.keys[]' 2>/dev/null || true)
+        else
+            namespaces=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" VAULT_NAMESPACE="" "$cli_tool" namespace list -format=json 2>/dev/null | jq -r '.[]' 2>/dev/null || true)
+        fi
+
+        # Add root option and clean up
+        namespaces=$(echo -e "root\n$namespaces" | grep -v "^null$" | sed 's/\/$//' | sort -u || echo "root")
+
+        selected=$(echo "$namespaces" | fzf --prompt="Namespace > " --height=40% --layout=reverse)
     fi
 
-    # Add root option and clean up
-    namespaces=$(echo -e "root\n$namespaces" | grep -v "^null$" | sed 's/\/$//' | sort -u || echo "root")
-
-    selected=$(echo "$namespaces" | fzf --prompt="Namespace > " --height=40% --layout=reverse)
     [[ -z "$selected" ]] && return
 
+    # Save previous namespace
+    local old_ns ns_history_cmd=""
+    old_ns=$(_get_config ".clusters.\"$cur\".namespace // \"root\"")
+    if [[ "$old_ns" != "$selected" ]]; then
+        ns_history_cmd=".clusters.\"$cur\".previous-namespace = \"$old_ns\" | "
+    fi
+
     if [[ "$selected" == "root" ]]; then
-        _set_config "del(.clusters.\"$cur\".namespace)"
+        _set_config "${ns_history_cmd}del(.clusters.\"$cur\".namespace)"
         _log "Namespace cleared (root)."
         _export_context "$cur" "$addr" "$token" ""
     else
-        _set_config ".clusters.\"$cur\".namespace = \"$selected\""
+        _set_config "${ns_history_cmd}.clusters.\"$cur\".namespace = \"$selected\""
         _log "Namespace set to: $selected"
         _export_context "$cur" "$addr" "$token" "$selected"
     fi
@@ -585,6 +610,13 @@ _perform_switch() {
         fi
     fi
 
+    local current
+    current=$(_get_config '.current-cluster')
+    local history_cmd=""
+    if [[ -n "$current" && "$current" != "null" && "$current" != "$selected" ]]; then
+        history_cmd=".previous-cluster = \"$current\" | "
+    fi
+
     if [[ "$needs_login" -eq 1 ]]; then
         if [[ "$cli_tool" == "curl" ]]; then _error "Login not possible via curl. Install bao/vault."; fi
         _log "Logging into $selected..."
@@ -597,11 +629,11 @@ _perform_switch() {
         now=$(date -Iseconds)
         
         _store_token "$selected" "$token"
-        _set_config ".clusters.\"$selected\".expire_token = \"$exp_token\" | .clusters.\"$selected\".last_authentication = \"$now\" | .current-cluster = \"$selected\""
+        _set_config "${history_cmd}.clusters.\"$selected\".expire_token = \"$exp_token\" | .clusters.\"$selected\".last_authentication = \"$now\" | .current-cluster = \"$selected\""
         _log "Login successful. Valid until: $exp_token"
     else
         _log "Switched to $selected"
-        _set_config ".current-cluster = \"$selected\""
+        _set_config "${history_cmd}.current-cluster = \"$selected\""
     fi
 
     _export_context "$selected" "$addr" "$token" "$ns"
