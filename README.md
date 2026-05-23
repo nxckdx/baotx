@@ -90,6 +90,23 @@ source <(command baotx completion zsh 2>/dev/null || command baotx completion ba
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
 
+## Hook-Scripts
+
+BaoTx supports pre- and post-command hooks. If you want to automate tasks (like connecting to a VPN before selecting a cluster or refreshing a local cache after login), you can place executable scripts in the data directory: `~/.local/share/baotx/`.
+
+**Naming Convention:**
+- `pre_<command>.sh`: Executed before the command. If it exits with a non-zero status, BaoTx will abort the command.
+- `post_<command>.sh`: Executed after the command.
+
+**Example:**
+To run a script before `baotx select`, create `~/.local/share/baotx/pre_select.sh`:
+```bash
+#!/bin/bash
+echo "Ensuring VPN is connected..."
+# Add your VPN check logic here
+```
+Don't forget to make it executable: `chmod +x ~/.local/share/baotx/pre_select.sh`.
+
 ## Configuration
 
 By default, the configuration is stored in `~/.baoconfig.yaml`.
@@ -205,6 +222,3 @@ style = "bold yellow"
 
 Contributions are welcome! If you have an idea or want to tackle one of the points below, feel free to open a Pull Request.
 
-Some ideas for future versions:
-
-- **Hook-Scripts:** Support for pre- and post-switch scripts to automate tasks like connecting to a VPN.

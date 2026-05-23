@@ -227,6 +227,23 @@ _baotx_logo(){
     _log " |____/ \__,_|\___/  |_/_/\_\  "
 }
 
+_run_hook() {
+    local type="$1" # pre or post
+    local cmd="$2"
+    shift 2
+    local hook_file="$DATA_DIR/${type}_${cmd}.sh"
+    
+    if [[ -x "$hook_file" ]]; then
+        if ! "$hook_file" "$@"; then
+            if [[ "$type" == "pre" ]]; then
+                _error "Pre-hook '$hook_file' failed with exit code $?. Aborting."
+            else
+                _log "Warning: Post-hook '$hook_file' failed with exit code $?."
+            fi
+        fi
+    fi
+}
+
 # --- Subcommand Functions ---
 
 # DESC: Checks for updates and installs the latest version
@@ -780,7 +797,14 @@ COMMAND="${1:-help}"
 shift || true
 
 if declare -F "cmd_$COMMAND" >/dev/null; then
-    "cmd_$COMMAND" "$@"
+    # Run hooks for everything except completion and load to avoid noise/recursion
+    if [[ "$COMMAND" != "completion" && "$COMMAND" != "load" ]]; then
+        _run_hook "pre" "$COMMAND" "$@"
+        "cmd_$COMMAND" "$@"
+        _run_hook "post" "$COMMAND" "$@"
+    else
+        "cmd_$COMMAND" "$@"
+    fi
 else
     _error "Unknown command: $COMMAND. Use 'baotx help' for a list of commands."
 fi
