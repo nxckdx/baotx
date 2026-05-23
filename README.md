@@ -35,41 +35,22 @@ curl -sSL https://raw.githubusercontent.com/nxckdx/baotx/main/install.sh | bash
 
 2. Initialize your configuration:
    ```bash
-   baotx init
+   baotx init config
    ```
    This creates a template at `~/.baoconfig.yaml`. Edit this file to add your clusters.
 
 ## Shell Integration (Mandatory)
 
-Since a standalone binary/script cannot modify the environment variables of your current shell, you need to add a small function to your `~/.zshrc` (or `~/.bashrc`). This function captures the output of `baotx` and evaluates it to set your variables.
+Since a standalone binary/script cannot modify the environment variables of your current shell, you need to add a small initialization line to your `~/.zshrc` (or `~/.bashrc`). This captures the output of `baotx` and evaluates it to set your variables.
 
-Add the following to your `~/.zshrc`:
+Add the following to your `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
-# >>> baotx initialize >>>
-# !! Contents within this block are managed by baotx !!
-baotx() {
-    local out
-    # For 'exec' and 'completion', we run the command directly without capturing output.
-    # This ensures interactivity and prevents issues with large output.
-    if [[ "$1" == "exec" || "$1" == "completion" ]]; then
-        command baotx "$@"
-        return $?
-    fi
-    
-    out=$(command baotx "$@")
-    local ret=$?
-    if [[ -n "$out" ]]; then
-        if [[ "$*" == *"--format=env"* ]]; then
-            echo "$out"
-        fi
-        eval "$out"
-    fi
-    return $ret
-}
-baotx load 2>/dev/null
-source <(command baotx completion zsh 2>/dev/null || command baotx completion bash 2>/dev/null)
-# <<< baotx initialize <<<
+# For ZSH
+eval "$(baotx init zsh)"
+
+# For Bash
+eval "$(baotx init bash)"
 ```
 
 ## Usage
@@ -85,7 +66,7 @@ source <(command baotx completion zsh 2>/dev/null || command baotx completion ba
 | `baotx ns -` | Switch back to the previous namespace for this cluster. |
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
-| `baotx status` | Show the current cluster, address, and token TTL. Use `--format=env` to export variables. |
+| `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output or `--policies` to see policy details. |
 | `baotx update` | Check for updates and install the latest version from GitHub. |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |

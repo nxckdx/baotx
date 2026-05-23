@@ -96,38 +96,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # 5. Shell Integration
-MARKER_START="# >>> baotx initialize >>>"
-MARKER_END="# <<< baotx initialize <<<"
-
-WRAPPER_CODE=$(cat << 'EOF'
-
-# >>> baotx initialize >>>
-# !! Contents within this block are managed by baotx !!
-baotx() {
-    local out
-    # For 'exec' and 'completion', we run the command directly without capturing output.
-    # This ensures interactivity and prevents issues with large output.
-    if [[ "$1" == "exec" || "$1" == "completion" ]]; then
-        command baotx "$@"
-        return $?
-    fi
-    
-    out=$(command baotx "$@")
-    local ret=$?
-    if [[ -n "$out" ]]; then
-        if [[ "$*" == *"--format=env"* ]]; then
-            echo "$out"
-        fi
-        eval "$out"
-    fi
-    return $ret
-}
-baotx load 2>/dev/null
-source <(command baotx completion zsh 2>/dev/null || command baotx completion bash 2>/dev/null)
-# <<< baotx initialize <<<
-EOF
-)
-
 SHELL_NAME=$(basename "$SHELL")
 RC_FILE=""
 
@@ -137,49 +105,43 @@ case "$SHELL_NAME" in
     *) warn "Unsupported shell: $SHELL_NAME. Manual integration required." ;;
 esac
 
+INTEGRATION_LINE="eval \"\$(baotx init $SHELL_NAME)\""
+
 if [ -n "$RC_FILE" ]; then
     echo -e "\n${YELLOW}Shell Integration:${NC}"
     
+    # Check for legacy markers first to help users clean up
+    MARKER_START="# >>> baotx initialize >>>"
+    MARKER_END="# <<< baotx initialize <<<"
+    
     if grep -qF "$MARKER_START" "$RC_FILE" 2>/dev/null; then
-        # Check if the content between markers matches
-        # We extract the part from the file including markers for easier comparison
-        EXISTING_BLOCK=$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$RC_FILE")
-        
-        # Trim leading/trailing whitespace for comparison
-        CLEAN_EXISTING=$(echo "$EXISTING_BLOCK" | xargs)
-        CLEAN_NEW=$(echo "$WRAPPER_CODE" | xargs)
-
-        if [ "$CLEAN_EXISTING" = "$CLEAN_NEW" ]; then
-            log "BaoTx integration in $RC_FILE is already up to date."
-        else
-            warn "BaoTx integration in $RC_FILE is outdated."
-            read -p "Do you want to update it now? (y/n): " update_confirm
-            if [[ "$update_confirm" =~ ^[Yy] ]]; then
-                # Use a temp file for safe replacement
-                TMP_RC=$(mktemp)
-                # Remove the old block and append the new one
-                sed "/$MARKER_START/,/$MARKER_END/d" "$RC_FILE" > "$TMP_RC"
-                echo "$WRAPPER_CODE" >> "$TMP_RC"
-                cat "$TMP_RC" > "$RC_FILE"
-                rm "$TMP_RC"
-                log "Successfully updated wrapper in $RC_FILE."
-            fi
+        warn "BaoTx integration in $RC_FILE uses outdated markers."
+        read -p "Do you want to update it to the new simplified version? (y/n): " update_confirm
+        if [[ "$update_confirm" =~ ^[Yy] ]]; then
+            TMP_RC=$(mktemp)
+            sed "/$MARKER_START/,/$MARKER_END/d" "$RC_FILE" > "$TMP_RC"
+            echo -e "\n$INTEGRATION_LINE" >> "$TMP_RC"
+            cat "$TMP_RC" > "$RC_FILE"
+            rm "$TMP_RC"
+            log "Successfully updated integration in $RC_FILE."
         fi
+    elif grep -qF "$INTEGRATION_LINE" "$RC_FILE" 2>/dev/null; then
+        log "BaoTx integration in $RC_FILE is already up to date."
     else
-        # Fallback check for the function name to avoid double definitions if markers are missing
+        # Fallback check for the legacy function name without markers
         if grep -q "baotx()" "$RC_FILE" 2>/dev/null; then
-             log "A 'baotx()' function was detected in $RC_FILE, but markers are missing."
-             log "Skipping automatic update to avoid conflicts."
+             log "A legacy 'baotx()' function was detected in $RC_FILE."
+             warn "Please manually replace your old baotx() function with: $INTEGRATION_LINE"
         else
-            echo "BaoTx needs a wrapper function to set environment variables in your current shell."
-            read -p "Automatically append wrapper to $RC_FILE? (y/n): " confirm_rc
+            echo "BaoTx needs a shell integration to set environment variables in your current shell."
+            read -p "Automatically append integration to $RC_FILE? (y/n): " confirm_rc
             if [[ "$confirm_rc" =~ ^[Yy] ]]; then
-                echo "$WRAPPER_CODE" >> "$RC_FILE"
-                log "Successfully added wrapper to $RC_FILE."
+                echo -e "\n$INTEGRATION_LINE" >> "$RC_FILE"
+                log "Successfully added integration to $RC_FILE."
             else
-                echo -e "\nSkipping automatic update. Please add the following to your shell config (e.g. $RC_FILE or your chezmoi template):"
+                echo -e "\nSkipping automatic update. Please add the following to your shell config (e.g. $RC_FILE):"
                 echo -e "${YELLOW}------------------------------------------------------------${NC}"
-                echo "$WRAPPER_CODE"
+                echo "$INTEGRATION_LINE"
                 echo -e "${YELLOW}------------------------------------------------------------${NC}"
             fi
         fi

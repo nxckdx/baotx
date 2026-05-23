@@ -297,13 +297,40 @@ cmd_help() {
     _log ""
 }
 
-# DESC: Creates a configuration template
+# DESC: Initializes configuration or shell integration (usage: baotx init [config|zsh|bash])
 cmd_init() {
-    if [[ -f "$PRIMARY_CONFIG" ]]; then
-        _error "Configuration file $PRIMARY_CONFIG already exists!"
+    local target="${1:-config}"
+    case "$target" in
+        zsh|bash)
+            cat <<EOF
+baotx() {
+    local out
+    if [[ "\$1" == "exec" || "\$1" == "completion" || "\$1" == "init" ]]; then
+        command baotx "\$@"
+        return \$?
     fi
-    cat <<EOF > "$PRIMARY_CONFIG"
+    
+    out=\$(command baotx "\$@")
+    local ret=\$?
+    if [[ -n "\$out" ]]; then
+        if [[ "\$*" == *"--format=env"* ]]; then
+            echo "\$out"
+        fi
+        eval "\$out"
+    fi
+    return \$ret
+}
+baotx load 2>/dev/null
+source <(command baotx completion $target 2>/dev/null)
+EOF
+            ;;
+        config)
+            if [[ -f "$PRIMARY_CONFIG" ]]; then
+                _error "Configuration file $PRIMARY_CONFIG already exists!"
+            fi
+            cat <<EOF > "$PRIMARY_CONFIG"
 cli_tool: ""
+token_storage: "keyring"
 clusters:
   dev-cluster:
     address: "https://bao-dev.example.com"
@@ -314,16 +341,20 @@ clusters:
     expire_token: ""
 current-cluster: ""
 EOF
-    chmod 600 "$PRIMARY_CONFIG"
-    _log "Template successfully created at $PRIMARY_CONFIG."
+            chmod 600 "$PRIMARY_CONFIG"
+            _log "Template successfully created at $PRIMARY_CONFIG."
+            ;;
+        *) _error "Usage: baotx init [config|zsh|bash]" ;;
+    esac
 }
 
-# DESC: Shows current context and token TTL (use --format=env for .env output)
+# DESC: Shows current context and token TTL (use --format=env for .env output, --policies for policy details)
 cmd_status() {
-    local format=""
+    local format="" show_policies=0
     for arg in "$@"; do
         case "$arg" in
             --format=env) format="env" ;;
+            --policies) show_policies=1 ;;
         esac
     done
 
@@ -355,16 +386,19 @@ cmd_status() {
     if [[ -z "$cur" || "$cur" == "null" ]]; then
         _log "No cluster selected."
     else
-        local addr exp ns diff hours mins token
+        local addr exp ns diff hours mins token cli_tool
         addr=$(_get_config ".clusters.\"$cur\".address")
         exp=$(_get_config ".clusters.\"$cur\".expire_token")
         ns=$(_get_config ".clusters.\"$cur\".namespace")
         token=$(_retrieve_token "$cur")
+        cli_tool=$(_get_cli_tool)
+
         _log "--- BaoTx Status ---"
         _log "Version:   ${VERSION}"
         _log "Cluster:   $cur"
         _log "Address:   $addr"
         [[ -n "$ns" && "$ns" != "null" ]] && _log "Namespace: $ns"
+        
         if [[ -n "$token" ]]; then
             if [[ -n "$exp" && "$exp" != "null" ]]; then
                 diff=$(($(date -d "$exp" +%s) - $(date +%s)))
@@ -377,6 +411,45 @@ cmd_status() {
                 fi
             else
                 _log "Token:     Valid (no expiry set)"
+            fi
+
+            # Policies
+            local policies=""
+            if [[ "$cli_tool" == "curl" ]]; then
+                local lookup_json
+                lookup_json=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" 2>/dev/null || true)
+                if [[ -n "$lookup_json" ]]; then
+                    policies=$(echo "$lookup_json" | jq -r '(.data.policies + (.data.identity_policies // [])) | unique | join(", ")')
+                fi
+            else
+                local lookup_json
+                lookup_json=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup -format=json 2>/dev/null || true)
+                if [[ -n "$lookup_json" ]]; then
+                    policies=$(echo "$lookup_json" | jq -r '(.data.policies + (.data.identity_policies // [])) | unique | join(", ")')
+                fi
+            fi
+            [[ -z "$policies" || "$policies" == "null" ]] && policies="unknown"
+            _log "Policies:  $policies"
+
+            if [[ "$show_policies" -eq 1 ]]; then
+                _log "\n--- Policy Details (excluding 'default') ---"
+                local policy_list
+                policy_list=$(echo "$policies" | tr -d ',' | tr ' ' '\n' | grep -v "^default$" || true)
+                for p in $policy_list; do
+                    _log "\n[ Policy: $p ]"
+                    local content=""
+                    if [[ "$cli_tool" == "curl" ]]; then
+                        content=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/sys/policies/acl/$p" | jq -r '.data.policy' 2>/dev/null || true)
+                    else
+                        content=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" policy read -format=json "$p" 2>/dev/null | jq -r '.policy' 2>/dev/null || true)
+                    fi
+
+                    if [[ -n "$content" ]]; then
+                        echo "$content" >&2
+                    else
+                        _log "(Access denied or empty)"
+                    fi
+                done
             fi
         else
             _log "Token:     NOT LOGGED IN"
@@ -712,7 +785,7 @@ cmd_completion() {
 
     case "$shell" in
         zsh)
-            cat << 'EOF' | sed "s|##CMD_LIST_ZSH##|$cmd_list_zsh|g"
+            cat << 'EOF' | sed "s@##CMD_LIST_ZSH##@$cmd_list_zsh@g"
 _baotx_completion() {
     local -a baotx_clusters
     local config_list="${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
@@ -740,7 +813,7 @@ _baotx_completion() {
                 ;;
             status)
                 local -a flags
-                flags=('--format=env:Output environment variables')
+                flags=('--format=env:Output environment variables' '--policies:Show policy details')
                 _describe -t flags 'flags' flags
                 ;;
             set-cli)
@@ -753,8 +826,9 @@ compdef _baotx_completion baotx
 EOF
             ;;
         bash)
-            cat << 'EOF' | sed "s|##CMD_LIST_BASH##|$cmd_list_bash|g"
-_baotx_bash_completion() {
+            cat << 'EOF' | sed "s@##CMD_LIST_BASH##@$cmd_list_bash@g"
+        _baotx_bash_completion() {
+
     local cur prev opts clusters config_list
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
@@ -778,7 +852,7 @@ _baotx_bash_completion() {
     fi
     case "$prev" in
         login|select|namespace|ns|exec) COMPREPLY=( $(compgen -W "$clusters" -- "$cur") ); return 0 ;;
-        status) COMPREPLY=( $(compgen -W "--format=env" -- "$cur") ); return 0 ;;
+        status) COMPREPLY=( $(compgen -W "--format=env --policies" -- "$cur") ); return 0 ;;
         set-cli) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
     esac
 }
