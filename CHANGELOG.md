@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/nxckdx/baotx/compare/baotx-v1.4.0...baotx-v1.4.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* do login in "exec"-cmd when token expired ([5b82b42](https://github.com/nxckdx/baotx/commit/5b82b42135d65da60fdedf52b307878c9723ee4e))
+
 ## [1.4.0](https://github.com/nxckdx/baotx/compare/baotx-v1.3.3...baotx-v1.4.0) (2026-05-23)
 
 
