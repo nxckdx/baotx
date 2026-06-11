@@ -688,7 +688,7 @@ cmd_namespace() {
     local needs_login=0
     if [[ -z "$token" || "$token" == "null" ]]; then needs_login=1
     elif [[ -n "$exp_token" && "$exp_token" != "null" ]]; then
-        [[ $(($(date -d "$exp_token" +%s) - 60)) -lt $(date +%s) ]] && needs_login=1
+        [[ $(date -d "$exp_token" +%s) -lt $(date +%s) ]] && needs_login=1
     fi
     
     # If token is expired or missing, perform a normal switch (which handles login)
@@ -784,7 +784,7 @@ _perform_switch() {
     if [[ "$needs_login" -eq 0 ]]; then
         if [[ -z "$token" || "$token" == "null" ]]; then needs_login=1
         elif [[ -n "$exp_token" && "$exp_token" != "null" ]]; then
-            [[ $(($(date -d "$exp_token" +%s) - 60)) -lt $(date +%s) ]] && needs_login=1
+            [[ $(date -d "$exp_token" +%s) -lt $(date +%s) ]] && needs_login=1
         fi
         
         if [[ "$needs_login" -eq 0 ]]; then
@@ -844,8 +844,32 @@ cmd_exec() {
     if [[ "$addr" == "null" ]]; then _error "Cluster \"$cluster\" not found."; fi
 
     token=$(_retrieve_token "$cluster")
+    
+    # Check if login is needed
+    local needs_login=0
     if [[ -z "$token" || "$token" == "null" ]]; then
-        _error "Not logged into $cluster. Run 'baotx login $target' first."
+        needs_login=1
+    else
+        local exp_token cli_tool
+        exp_token=$(_get_config ".clusters.\"$cluster\".expire_token")
+        if [[ -n "$exp_token" && "$exp_token" != "null" ]]; then
+            [[ $(date -d "$exp_token" +%s) -lt $(date +%s) ]] && needs_login=1
+        fi
+        
+        if [[ "$needs_login" -eq 0 ]]; then
+            cli_tool=$(_get_cli_tool)
+            if [[ "$cli_tool" == "curl" ]]; then
+                ! curl -s -f -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" >/dev/null 2>&1 && needs_login=1
+            else
+                ! VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup >/dev/null 2>&1 && needs_login=1
+            fi
+        fi
+    fi
+
+    if [[ "$needs_login" -eq 1 ]]; then
+        _log "Authentication required for $cluster..."
+        _perform_switch "$cluster" 1 >/dev/null
+        token=$(_retrieve_token "$cluster")
     fi
 
     ns=$(_get_config ".clusters.\"$cluster\".namespace")
