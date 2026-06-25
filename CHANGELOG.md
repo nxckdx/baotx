@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/nxckdx/baotx/compare/baotx-v1.4.1...baotx-v1.4.2) (2026-06-25)
+
+
+### Bug Fixes
+
+* load namespace and custom envs before token validation in switch and exec ([6ad8c52](https://github.com/nxckdx/baotx/commit/6ad8c5213d53c2272000ab7be80f4671932d1e91))
+
 ## [1.4.1](https://github.com/nxckdx/baotx/compare/baotx-v1.4.0...baotx-v1.4.1) (2026-06-11)
 
 
