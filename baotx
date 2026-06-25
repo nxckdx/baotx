@@ -762,7 +762,7 @@ _perform_switch() {
     local selected="$1"
     local force_login="$2"
     local override_method="${3:-}"
-    local addr login_method token exp_token cli_tool ns
+    local addr login_method token exp_token cli_tool ns custom_env
     
     addr=$(_get_config ".clusters.\"$selected\".address")
     if [[ "$addr" == "null" ]]; then _error "Cluster \"$selected\" not found."; fi
@@ -779,6 +779,21 @@ _perform_switch() {
     exp_token=$(_get_config ".clusters.\"$selected\".expire_token")
     ns=$(_get_config ".clusters.\"$selected\".namespace")
     cli_tool=$(_get_cli_tool)
+    custom_env=$(_get_config ".clusters.\"$selected\".env" | jq -c '.' 2>/dev/null || echo "")
+
+    # Export variables temporarily for validation checks and login
+    if [[ -n "$ns" && "$ns" != "null" ]]; then
+        export VAULT_NAMESPACE="$ns"
+        export BAO_NAMESPACE="$ns"
+    fi
+
+    if [[ -n "$custom_env" && "$custom_env" != "null" ]]; then
+        while IFS='=' read -r key value; do
+            if [[ -n "$key" ]]; then
+                export "$key"="$value"
+            fi
+        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
+    fi
 
     local needs_login="$force_login"
     if [[ "$needs_login" -eq 0 ]]; then
@@ -789,7 +804,11 @@ _perform_switch() {
         
         if [[ "$needs_login" -eq 0 ]]; then
             if [[ "$cli_tool" == "curl" ]]; then
-                ! curl -s -f -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" >/dev/null 2>&1 && needs_login=1
+                local curl_args=(-s -f -H "X-Vault-Token: $token")
+                if [[ -n "$ns" && "$ns" != "null" ]]; then
+                    curl_args+=(-H "X-Vault-Namespace: $ns")
+                fi
+                ! curl "${curl_args[@]}" "$addr/v1/auth/token/lookup-self" >/dev/null 2>&1 && needs_login=1
             else
                 ! VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup >/dev/null 2>&1 && needs_login=1
             fi
@@ -822,8 +841,6 @@ _perform_switch() {
         _set_config "${history_cmd}.current-cluster = \"$selected\""
     fi
 
-    local custom_env
-    custom_env=$(_get_config ".clusters.\"$selected\".env" | jq -c '.' 2>/dev/null || echo "")
     _export_context "$selected" "$addr" "$token" "$ns" "$custom_env"
 }
 
@@ -839,43 +856,15 @@ cmd_exec() {
     local cluster
     cluster=$(_resolve_alias "$target")
     
-    local addr token ns
+    local addr token ns custom_env
     addr=$(_get_config ".clusters.\"$cluster\".address")
     if [[ "$addr" == "null" ]]; then _error "Cluster \"$cluster\" not found."; fi
 
     token=$(_retrieve_token "$cluster")
-    
-    # Check if login is needed
-    local needs_login=0
-    if [[ -z "$token" || "$token" == "null" ]]; then
-        needs_login=1
-    else
-        local exp_token cli_tool
-        exp_token=$(_get_config ".clusters.\"$cluster\".expire_token")
-        if [[ -n "$exp_token" && "$exp_token" != "null" ]]; then
-            [[ $(date -d "$exp_token" +%s) -lt $(date +%s) ]] && needs_login=1
-        fi
-        
-        if [[ "$needs_login" -eq 0 ]]; then
-            cli_tool=$(_get_cli_tool)
-            if [[ "$cli_tool" == "curl" ]]; then
-                ! curl -s -f -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" >/dev/null 2>&1 && needs_login=1
-            else
-                ! VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup >/dev/null 2>&1 && needs_login=1
-            fi
-        fi
-    fi
-
-    if [[ "$needs_login" -eq 1 ]]; then
-        _log "Authentication required for $cluster..."
-        _perform_switch "$cluster" 1 >/dev/null
-        token=$(_retrieve_token "$cluster")
-    fi
-
     ns=$(_get_config ".clusters.\"$cluster\".namespace")
-    local custom_env
     custom_env=$(_get_config ".clusters.\"$cluster\".env" | jq -c '.' 2>/dev/null || echo "")
 
+    # Export variables so they are available for token validation and the executed command
     export VAULT_ADDR="$addr"
     export VAULT_TOKEN="$token"
     export BAO_ADDR="$addr"
@@ -892,6 +881,40 @@ cmd_exec() {
                 export "$key"="$value"
             fi
         done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
+    fi
+
+    # Check if login is needed
+    local needs_login=0
+    if [[ -z "$token" || "$token" == "null" ]]; then
+        needs_login=1
+    else
+        local exp_token cli_tool
+        exp_token=$(_get_config ".clusters.\"$cluster\".expire_token")
+        if [[ -n "$exp_token" && "$exp_token" != "null" ]]; then
+            [[ $(date -d "$exp_token" +%s) -lt $(date +%s) ]] && needs_login=1
+        fi
+        
+        if [[ "$needs_login" -eq 0 ]]; then
+            cli_tool=$(_get_cli_tool)
+            if [[ "$cli_tool" == "curl" ]]; then
+                local curl_args=(-s -f -H "X-Vault-Token: $token")
+                if [[ -n "$ns" && "$ns" != "null" ]]; then
+                    curl_args+=(-H "X-Vault-Namespace: $ns")
+                fi
+                ! curl "${curl_args[@]}" "$addr/v1/auth/token/lookup-self" >/dev/null 2>&1 && needs_login=1
+            else
+                ! VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup >/dev/null 2>&1 && needs_login=1
+            fi
+        fi
+    fi
+
+    if [[ "$needs_login" -eq 1 ]]; then
+        _log "Authentication required for $cluster..."
+        _perform_switch "$cluster" 1 >/dev/null
+        token=$(_retrieve_token "$cluster")
+        # Re-export updated token
+        export VAULT_TOKEN="$token"
+        export BAO_TOKEN="$token"
     fi
 
     exec "$@"
