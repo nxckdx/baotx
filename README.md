@@ -39,6 +39,48 @@ curl -sSL https://raw.githubusercontent.com/nxckdx/baotx/main/install.sh | bash
    ```
    This creates a template at `~/.baoconfig.yaml`. Edit this file to add your clusters.
 
+### NixOS / Nix Package Manager
+
+If you are using NixOS or the Nix package manager, you can install and use BaoTx in two ways:
+
+#### Option 1: Via Flakes (Recommended)
+
+You can run it directly without installing:
+```bash
+nix run github:nxckdx/baotx -- help
+```
+
+Or add it to your system configuration. Add the input to your system's `flake.nix`:
+```nix
+inputs.baotx.url = "github:nxckdx/baotx";
+```
+
+And then include the package in your system packages:
+```nix
+environment.systemPackages = [
+  inputs.baotx.packages.${pkgs.system}.default
+];
+```
+
+#### Option 2: Via Tarball (Traditional Nix)
+
+If you do not use Flakes, you can fetch and build the package directly in your `configuration.nix` by pointing to the repository's source tarball:
+```nix
+let
+  baotx = import (builtins.fetchTarball {
+    url = "https://github.com/nxckdx/baotx/archive/refs/heads/main.tar.gz";
+  }) {};
+in
+{
+  environment.systemPackages = [
+    baotx
+  ];
+}
+```
+> [!NOTE]
+> For production systems and reproducible builds, it is recommended to replace `refs/heads/main.tar.gz` with a specific tag or commit archive, for example: `https://github.com/nxckdx/baotx/archive/refs/tags/v1.4.2.tar.gz`.
+
+
 ## Shell Integration (Mandatory)
 
 Since a standalone binary/script cannot modify the environment variables of your current shell, you need to add a small initialization line to your `~/.zshrc` (or `~/.bashrc`). This captures the output of `baotx` and evaluates it to set your variables.
