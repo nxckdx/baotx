@@ -58,7 +58,7 @@ inputs.baotx.url = "github:nxckdx/baotx";
 And then include the package in your system packages:
 ```nix
 environment.systemPackages = [
-  inputs.baotx.packages.${pkgs.system}.default
+  inputs.baotx.packages.${pkgs.stdenv.hostPlatform.system}.default
 ];
 ```
 
