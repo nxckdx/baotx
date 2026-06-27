@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/nxckdx/baotx/compare/baotx-v1.4.2...baotx-v1.5.0) (2026-06-27)
+
+
+### Features
+
+* add nix files ([335a131](https://github.com/nxckdx/baotx/commit/335a13108997508c31dd6012750a34b152b1334b))
+
 ## [1.4.2](https://github.com/nxckdx/baotx/compare/baotx-v1.4.1...baotx-v1.4.2) (2026-06-25)
 
 
