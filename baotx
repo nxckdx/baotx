@@ -193,10 +193,26 @@ _resolve_alias() {
     fi
 }
 
+_is_insecure() {
+    local cluster="$1"
+    [[ -z "$cluster" || "$cluster" == "null" ]] && return 1
+    local insecure
+    insecure=$(_get_config ".clusters.\"$cluster\".insecure // .clusters.\"$cluster\".tls_skip_verify // .clusters.\"$cluster\".skip_verify // .clusters.\"$cluster\".env.VAULT_SKIP_VERIFY // .clusters.\"$cluster\".env.BAO_SKIP_VERIFY // false")
+    if [[ "$insecure" == "true" || "$insecure" == "1" ]]; then
+        return 0
+    fi
+    return 1
+}
+
 _check_health() {
     local addr="$1"
+    local cluster="${2:-}"
+    local curl_opts=(-s -f -m 2)
+    if [[ -n "$cluster" ]] && _is_insecure "$cluster"; then
+        curl_opts+=(-k)
+    fi
     # Use a short timeout for health checks
-    if curl -s -f -m 2 "$addr/v1/sys/health" >/dev/null 2>&1; then
+    if curl "${curl_opts[@]}" "$addr/v1/sys/health" >/dev/null 2>&1; then
         echo "online"
     else
         echo "offline"
@@ -224,6 +240,13 @@ _export_context() {
         echo "export BAO_NAMESPACE=\"$ns\""
     else
         echo "unset VAULT_NAMESPACE BAO_NAMESPACE"
+    fi
+
+    if _is_insecure "$cluster"; then
+        echo "export VAULT_SKIP_VERIFY=\"1\""
+        echo "export BAO_SKIP_VERIFY=\"1\""
+    else
+        echo "unset VAULT_SKIP_VERIFY BAO_SKIP_VERIFY"
     fi
 
     # Export custom environment variables
@@ -525,7 +548,7 @@ cmd_clear() {
     _set_config '.current-cluster = ""'
     _log "Context cleared."
     
-    local unset_cmd="unset VAULT_ADDR VAULT_TOKEN BAO_ADDR BAO_TOKEN BAOTX_CLUSTER VAULT_NAMESPACE BAO_NAMESPACE"
+    local unset_cmd="unset VAULT_ADDR VAULT_TOKEN BAO_ADDR BAO_TOKEN BAOTX_CLUSTER VAULT_NAMESPACE BAO_NAMESPACE VAULT_SKIP_VERIFY BAO_SKIP_VERIFY"
     if [[ -n "${BAOTX_VARS:-}" ]]; then
         for var in $BAOTX_VARS; do
             unset_cmd+=" $var"
@@ -611,7 +634,7 @@ cmd_select() {
         while read -r name addr; do
             (
                 local status
-                status=$(_check_health "$addr")
+                status=$(_check_health "$addr" "$name")
                 echo "$name $status" >> "$health_tmp"
             ) &
         done <<< "$cluster_data"
@@ -806,6 +829,7 @@ _perform_switch() {
         if [[ "$needs_login" -eq 0 ]]; then
             if [[ "$cli_tool" == "curl" ]]; then
                 local curl_args=(-s -f -H "X-Vault-Token: $token")
+                _is_insecure "$selected" && curl_args+=(-k)
                 if [[ -n "$ns" && "$ns" != "null" ]]; then
                     curl_args+=(-H "X-Vault-Namespace: $ns")
                 fi
@@ -839,6 +863,9 @@ _perform_switch() {
         fi
 
         local extra_args=()
+        if _is_insecure "$selected"; then
+            extra_args+=("-tls-skip-verify")
+        fi
         if [[ -n "$username" && "$username" != "null" ]]; then
             extra_args+=("username=$username")
         fi
@@ -893,6 +920,11 @@ cmd_exec() {
         export BAO_NAMESPACE="$ns"
     fi
 
+    if _is_insecure "$cluster"; then
+        export VAULT_SKIP_VERIFY="1"
+        export BAO_SKIP_VERIFY="1"
+    fi
+
     if [[ -n "$custom_env" && "$custom_env" != "null" ]]; then
         while IFS='=' read -r key value; do
             if [[ -n "$key" ]]; then
@@ -916,6 +948,7 @@ cmd_exec() {
             cli_tool=$(_get_cli_tool)
             if [[ "$cli_tool" == "curl" ]]; then
                 local curl_args=(-s -f -H "X-Vault-Token: $token")
+                _is_insecure "$cluster" && curl_args+=(-k)
                 if [[ -n "$ns" && "$ns" != "null" ]]; then
                     curl_args+=(-H "X-Vault-Namespace: $ns")
                 fi

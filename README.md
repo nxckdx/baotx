@@ -202,8 +202,9 @@ clusters:
     username: "john.doe" # optional username for userpass/ldap (prompts interactively if omitted)
     namespace: "admin" # optional active namespace
   dev:
-    address: "http://127.0.0.1:8200"
-    login: "token"
+    address: "https://self-signed.example.com"
+    login: "userpass"
+    insecure: true     # skip TLS certificate verification (or tls_skip_verify: true)
 current-cluster: "prod"
 ```
 
