@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/nxckdx/baotx/compare/baotx-v1.4.2...baotx-v1.5.0) (2026-07-29)
+
+
+### Features
+
+* add insecure ([5436ab1](https://github.com/nxckdx/baotx/commit/5436ab1939e23735de7681d4c719502294fcaea2))
+* add nix files ([335a131](https://github.com/nxckdx/baotx/commit/335a13108997508c31dd6012750a34b152b1334b))
+
+
+### Bug Fixes
+
+* ask for username when login method is userpass, ldap, radius or okta ([e046b50](https://github.com/nxckdx/baotx/commit/e046b50c13e70a7d17db2f5adc0c95f788ffef29))
+
 ## [1.4.2](https://github.com/nxckdx/baotx/compare/baotx-v1.4.1...baotx-v1.4.2) (2026-06-25)
 
 
