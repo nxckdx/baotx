@@ -18,7 +18,7 @@
         {
           default = pkgs.stdenvNoCC.mkDerivation rec {
             pname = "baotx";
-            version = "1.4.2";
+            version = "1.5.0";
 
             src = ./.;
 
