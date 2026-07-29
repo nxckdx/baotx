@@ -365,6 +365,7 @@ clusters:
   dev-cluster:
     address: "https://bao-dev.example.com"
     login: "userpass"
+    username: ""
     aliases: ["dev", "d"]
     last_authentication: ""
     token: ""
@@ -762,7 +763,7 @@ _perform_switch() {
     local selected="$1"
     local force_login="$2"
     local override_method="${3:-}"
-    local addr login_method token exp_token cli_tool ns custom_env
+    local addr login_method token exp_token cli_tool ns custom_env username
     
     addr=$(_get_config ".clusters.\"$selected\".address")
     if [[ "$addr" == "null" ]]; then _error "Cluster \"$selected\" not found."; fi
@@ -825,8 +826,25 @@ _perform_switch() {
     if [[ "$needs_login" -eq 1 ]]; then
         if [[ "$cli_tool" == "curl" ]]; then _error "Login not possible via curl. Install bao/vault."; fi
         _log "Logging into $selected..."
+        
+        username=$(_get_config ".clusters.\"$selected\".username // \"\"")
+        if [[ -z "$username" || "$username" == "null" ]]; then
+            if [[ "$login_method" == "userpass" || "$login_method" == "ldap" || "$login_method" == "radius" || "$login_method" == "okta" ]]; then
+                if [[ -t 0 ]]; then
+                    read -r -p "Username: " username
+                elif [[ -c /dev/tty ]]; then
+                    read -r -p "Username: " username </dev/tty
+                fi
+            fi
+        fi
+
+        local extra_args=()
+        if [[ -n "$username" && "$username" != "null" ]]; then
+            extra_args+=("username=$username")
+        fi
+
         local login_json dur now
-        login_json=$("$cli_tool" login -method="$login_method" -address="$addr" -format=json) || _error "Login failed!"
+        login_json=$("$cli_tool" login -method="$login_method" -address="$addr" -format=json "${extra_args[@]}") || _error "Login failed!"
         
         token=$(echo "$login_json" | jq -r '.auth.client_token')
         dur=$(echo "$login_json" | jq -r '.auth.lease_duration')

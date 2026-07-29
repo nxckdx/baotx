@@ -199,6 +199,7 @@ clusters:
     login: 
       - "oidc"      # The first method is the default
       - "userpass"  # Alternative method
+    username: "john.doe" # optional username for userpass/ldap (prompts interactively if omitted)
     namespace: "admin" # optional active namespace
   dev:
     address: "http://127.0.0.1:8200"
