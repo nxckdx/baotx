@@ -22,22 +22,24 @@ jobs:
       - uses: google-github-actions/release-please-action@v4
         id: release
 
-      - name: Update baotx in repo and upload asset
+      - name: Sync baotx script version and upload release asset
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ steps.release.outputs.tag_name }}"
-          VERSION_TO_SET="${TAG_NAME#v}"
+          # release-please already bumped ./VERSION as part of the release PR,
+          # so read the plain semver from there instead of parsing the tag string.
+          VERSION="$(cat VERSION)"
 
-          echo "Syncing baotx to version $VERSION_TO_SET..."
+          echo "Syncing baotx script to version $VERSION (tag $TAG_NAME)..."
 
-          sed -i "s/^VERSION=.*/VERSION=\"$VERSION_TO_SET\"/" baotx
+          sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/" baotx
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add baotx
-          git commit -m "chore: update version in baotx to $VERSION_TO_SET [skip ci]"
+          git commit -m "chore: sync baotx script version to $VERSION [skip ci]"
           git push origin main
 
           gh release upload "$TAG_NAME" baotx --clobber
