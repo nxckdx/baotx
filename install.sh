@@ -53,6 +53,13 @@ for cmd in curl jq yq fzf; do
     fi
 done
 
+# yq comes in two incompatible flavors: the Go tool by mikefarah/yq (required)
+# and the Python wrapper kislyuk/yq (e.g. from 'pip install yq'), which uses
+# different syntax and will make baotx fail at runtime.
+if command -v yq >/dev/null 2>&1 && ! yq --version 2>&1 | grep -qi "mikefarah"; then
+    warn "The installed 'yq' looks like the Python wrapper (kislyuk/yq), not the required Go-based yq by mikefarah (https://github.com/mikefarah/yq). BaoTx will refuse to run until you install the correct one."
+fi
+
 # Keyring check
 if command -v secret-tool >/dev/null 2>&1 || command -v security >/dev/null 2>&1; then
     log "  [✓] Keyring tool found"

@@ -11,10 +11,17 @@ The core idea of **BaoTx** is heavily inspired by how `kubectl` manages multiple
 BaoTx relies on the following tools:
 - `fzf` (for interactive cluster selection)
 - `jq` (for JSON processing)
-- `yq` (for YAML configuration management)
+- `yq` (for YAML configuration management) — see note below, **there are two incompatible tools named `yq`**
 - `curl` (for health checks)
 - `bao` or `vault` CLI
 - **Optional (Secure Storage):** `secret-tool` (Linux), `security` (macOS), `gpg`, or `age`
+
+> [!WARNING]
+> There are two unrelated CLI tools called `yq`:
+> - [**mikefarah/yq**](https://github.com/mikefarah/yq) (Go) — **this is the one BaoTx needs.** `yq --version` prints something like `yq (https://github.com/mikefarah/yq/) version v4.x.x`.
+> - [**kislyuk/yq**](https://github.com/kislyuk/yq) (Python, a thin wrapper around `jq`) — this is what `pip install yq` gives you, and it does **not** support the `eval-all`/`ireduce` syntax or `-i` semantics BaoTx uses. BaoTx will refuse to run if it detects this one.
+>
+> On most package managers the Go version is what you get by default (e.g. `brew install yq`, or `yq-go` on nixpkgs — see the Nix section below), but if `yq` was installed via `pip`/`pipx`, it's almost certainly the wrong one. Uninstall it and install mikefarah/yq instead (e.g. via a release binary, `go install`, or your OS package manager).
 
 ## Installation
 

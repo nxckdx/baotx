@@ -59,7 +59,15 @@ _check_deps() {
             _error "Required tool \"$cmd\" is not installed."
         fi
     done
-    
+
+    # There are two unrelated tools called "yq": the Go-based one by Mikefarah
+    # (https://github.com/mikefarah/yq) which BaoTx requires, and a Python
+    # wrapper around jq (https://github.com/kislyuk/yq) with different syntax
+    # (no `eval-all`, no `ireduce`, different -i semantics). Detect the wrong one early.
+    if ! yq --version 2>&1 | grep -qi "mikefarah"; then
+        _error "The installed 'yq' is not the required one. BaoTx needs the Go-based yq by Mikefarah (https://github.com/mikefarah/yq), not the Python 'yq' wrapper around jq. Please install the correct one."
+    fi
+
     mkdir -p "$DATA_DIR"
 }
 
