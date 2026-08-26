@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.6.0](https://github.com/nxckdx/baotx/compare/v1.5.0...1.6.0) (2026-08-26)
+
+
+### Features
+
+* add context and namespace history ([4a59907](https://github.com/nxckdx/baotx/commit/4a59907d65ca070ca9ba7ea0f13098e88784225d))
+* add context and namespace history ([a114fb7](https://github.com/nxckdx/baotx/commit/a114fb7a03e4608c8d7804628056a652e848e837))
+* add exec wrapper, cluster alias, environment output, cluster health check in fzf, updater ([bfefb82](https://github.com/nxckdx/baotx/commit/bfefb82549ed1598c1fc00f5a6ca31c9d067b1a2))
+* add history, hooks, cluster-env vars and simplified init ([b22f025](https://github.com/nxckdx/baotx/commit/b22f025e9411449e99474cc9327787403dd08c7b))
+* add insecure ([5436ab1](https://github.com/nxckdx/baotx/commit/5436ab1939e23735de7681d4c719502294fcaea2))
+* add nix files ([335a131](https://github.com/nxckdx/baotx/commit/335a13108997508c31dd6012750a34b152b1334b))
+* add pre and post hooks ([18af042](https://github.com/nxckdx/baotx/commit/18af0423b01e0e0b75346ae0405adf8b77d00769))
+* add readme and baotx ([9274bf4](https://github.com/nxckdx/baotx/commit/9274bf43dae5b9fb912a4c5240eddceff6477db5))
+* add release-please workflow and update command ([5d66385](https://github.com/nxckdx/baotx/commit/5d663859b7affe4402d4f4fc300d316529cec270))
+* add support for multiple login methods ([508d481](https://github.com/nxckdx/baotx/commit/508d4810bd790010e548bee73cc6fd6b261414e3))
+* add support for token encryption ([acbb12d](https://github.com/nxckdx/baotx/commit/acbb12d4f53a374f2db0249152fd118bf0b52b83))
+* **nix:** add NixOS module enabling gnome-keyring for secret-tool support ([b379a3c](https://github.com/nxckdx/baotx/commit/b379a3cb08c57b5f220549c008d335fe82ff1109))
+* refactore baotx with functions, add namespace support, add install.sh script, update readme ([9f7d9fc](https://github.com/nxckdx/baotx/commit/9f7d9fcb5309a8aba1184fb7ef71a93af2d26f08))
+
+
+### Bug Fixes
+
+* add baotx in github-release ([848ca6a](https://github.com/nxckdx/baotx/commit/848ca6a1f099a7681df70d555d73680408e56cd8))
+* add baotx in github-release ([cf1a0c2](https://github.com/nxckdx/baotx/commit/cf1a0c20772116827e15ecfbe9fea46d391a6f0e))
+* add last_authentication in baoconfig after login ([14626f6](https://github.com/nxckdx/baotx/commit/14626f6a025a9ac1aca0d663d3ebc9e245cc713d))
+* ask for username when login method is userpass, ldap, radius or okta ([e046b50](https://github.com/nxckdx/baotx/commit/e046b50c13e70a7d17db2f5adc0c95f788ffef29))
+* bao status can show all clusters with --all flag ([5ca5b43](https://github.com/nxckdx/baotx/commit/5ca5b437b6f718542774d07d4b899e97fd24ad8c))
+* correct token-validity checks causing spurious re-logins on insecure clusters ([a956f46](https://github.com/nxckdx/baotx/commit/a956f462d12e8fac27f4e65bc914131bf90f90b1))
+* do login in "exec"-cmd when token expired ([5b82b42](https://github.com/nxckdx/baotx/commit/5b82b42135d65da60fdedf52b307878c9723ee4e))
+* github-release in baotx file ([1ed2bce](https://github.com/nxckdx/baotx/commit/1ed2bce5ef78c7c76096d50c40d7e87b166ca4d1))
+* github-release in baotx file ([3449f64](https://github.com/nxckdx/baotx/commit/3449f645a84fc03f60d140ec1d1820079378910d))
+* github-release in baotx file ([f329371](https://github.com/nxckdx/baotx/commit/f329371b70c73a8c7a15a25326e4e0544f0746eb))
+* github-release in baotx file ([9d2b3b6](https://github.com/nxckdx/baotx/commit/9d2b3b6ac8ba592a6c4a10ffa0d79dfb9a29298d))
+* github-release in baotx file ([7f1cc18](https://github.com/nxckdx/baotx/commit/7f1cc18f54981280c190b5a95cc38ea18cb4199f))
+* github-release in baotx file ([6672aa7](https://github.com/nxckdx/baotx/commit/6672aa791fe54af3a7a1b9341aabcd3086a0c730))
+* github-workflow ([ac48f14](https://github.com/nxckdx/baotx/commit/ac48f14acd2e861438e825a3e54f29819eae9259))
+* github-workflow ([4ea041f](https://github.com/nxckdx/baotx/commit/4ea041fd3e0bacdef80b072920a7cd675688d66c))
+* github-workflow ([e720e9d](https://github.com/nxckdx/baotx/commit/e720e9d58aafd9d54dc2cdd1e0b245fdfa253086))
+* github-workflow ([9c5ad19](https://github.com/nxckdx/baotx/commit/9c5ad197819471d1f21366c0d9ca54f9b8e437a5))
+* github-workflow ([cc1bf28](https://github.com/nxckdx/baotx/commit/cc1bf2828505ce889be29f2a51266a636e78e1b4))
+* github-workflow, last try for today ;) ([76d1b23](https://github.com/nxckdx/baotx/commit/76d1b233eac14a3de634cc07d39160ead2a2ee6c))
+* github-workflow, last try for today ;) ([245d3c3](https://github.com/nxckdx/baotx/commit/245d3c3d8f08dd07d34d6900f0628b97899d6de5))
+* hook scripts with echo and eval ([45c8021](https://github.com/nxckdx/baotx/commit/45c8021ecb924ee5eb5782ede53d84cbeb1fcc0a))
+* load namespace and custom envs before token validation in switch and exec ([6ad8c52](https://github.com/nxckdx/baotx/commit/6ad8c5213d53c2272000ab7be80f4671932d1e91))
+* make baotx update safer under Nix and on permission/tmp errors ([a748b50](https://github.com/nxckdx/baotx/commit/a748b5091fba2c04befd86eaa33fb7b2aca8bcda))
+* **nix:** read package version from ./VERSION to avoid drift ([878994e](https://github.com/nxckdx/baotx/commit/878994e2df2317fbab218d3ef7fd148fce22c019))
+* pipeline workflow ([4a26c03](https://github.com/nxckdx/baotx/commit/4a26c03f378cbb6ec132f7410d29d7e495b7209f))
+* pipeline workflow ([7a166e7](https://github.com/nxckdx/baotx/commit/7a166e718d0403085332d4cdabbdd67a5b47a532))
+* require the Go-based yq and reject the incompatible Python yq wrapper ([fa9579f](https://github.com/nxckdx/baotx/commit/fa9579fb21def333a4cee73e90f713710aac6380))
+* rewrite baotx init command and put one-liner in .zshrc or .bashrc ([826e33f](https://github.com/nxckdx/baotx/commit/826e33ff865da9bcf1984230d05f07c9d5b90da0))
+* show version in status ([51222f1](https://github.com/nxckdx/baotx/commit/51222f1103a48698768d277cefaa16e51bd3d3f5))
+
 ## [1.5.0](https://github.com/nxckdx/baotx/compare/baotx-v1.4.2...baotx-v1.5.0) (2026-07-29)
 
 
