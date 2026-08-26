@@ -2,7 +2,8 @@
 
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "baotx";
-  version = "1.5.0";
+  # Read from ./VERSION so the release-please bump doesn't also need to touch this by hand.
+  version = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
 
   src = ./.;
 

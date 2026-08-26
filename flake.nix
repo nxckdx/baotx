@@ -9,6 +9,9 @@
     let
       supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+      # Read from ./VERSION so the release-please bump (which already targets this
+      # file) doesn't also need to touch flake.nix/default.nix by hand.
+      version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
     in
     {
       packages = forAllSystems (system:
@@ -16,9 +19,9 @@
           pkgs = nixpkgs.legacyPackages.${system};
         in
         {
-          default = pkgs.stdenvNoCC.mkDerivation rec {
+          default = pkgs.stdenvNoCC.mkDerivation {
             pname = "baotx";
-            version = "1.5.0";
+            inherit version;
 
             src = ./.;
 
