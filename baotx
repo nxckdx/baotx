@@ -311,26 +311,37 @@ _run_hook() {
 
 # DESC: Checks for updates and installs the latest version
 cmd_update() {
+    if [[ "$SCRIPT_PATH" == /nix/store/* ]]; then
+        _error "BaoTx was installed via Nix/NixOS, so it lives in the read-only Nix store and cannot self-update. Update it via your flake input ('nix flake update baotx' + rebuild) or by bumping the nixpkgs/channel revision instead."
+    fi
+
     local latest_version
     _log "Checking for updates..."
     latest_version=$(curl -s "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" | jq -r .tag_name)
-    
+
     if [[ "$latest_version" == "null" ]]; then
         _error "Could not find any releases for $REPO_OWNER/$REPO_NAME."
     fi
 
-    if [[ "$latest_version" == "v$VERSION" || "$latest_version" == "$VERSION" ]]; then
+    if [[ "$latest_version" == "$VERSION" ]]; then
         _log "BaoTx is already up to date ($VERSION)."
     else
+        local install_dir
+        install_dir=$(dirname "$SCRIPT_PATH")
+        if [[ ! -w "$install_dir" ]]; then
+            _error "No permission to write to $install_dir. Re-run with sudo, or reinstall BaoTx to a directory you own (e.g. ~/.local/bin)."
+        fi
+
         _log "Updating BaoTx from $VERSION to $latest_version..."
         # Download to a temp file first
         local tmp_bin
-        tmp_bin=$(mktemp)
+        tmp_bin=$(mktemp) || _error "Could not create a temporary file (is \$TMPDIR writable?)."
         if curl -sSLf "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/baotx" -o "$tmp_bin"; then
             chmod +x "$tmp_bin"
             mv "$tmp_bin" "$SCRIPT_PATH"
             _log "Update successful! Please restart your shell."
         else
+            rm -f "$tmp_bin"
             _error "Download failed. The release asset might not be available yet."
         fi
     fi
@@ -642,7 +653,7 @@ cmd_select() {
     if [[ -z "$selected" ]]; then
         # We use a temporary file to store health results to avoid blocking fzf
         local health_tmp
-        health_tmp=$(mktemp)
+        health_tmp=$(mktemp) || _error "Could not create a temporary file (is \$TMPDIR writable?)."
         
         # Get clusters and their addresses
         local cluster_data
