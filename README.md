@@ -85,7 +85,34 @@ in
 }
 ```
 > [!NOTE]
-> For production systems and reproducible builds, it is recommended to replace `refs/heads/main.tar.gz` with a specific tag or commit archive, for example: `https://github.com/nxckdx/baotx/archive/refs/tags/v1.4.2.tar.gz`.
+> For production systems and reproducible builds, it is recommended to replace `refs/heads/main.tar.gz` with a specific tag or commit archive, for example: `https://github.com/nxckdx/baotx/archive/refs/tags/1.6.0.tar.gz`. Check the [Releases page](https://github.com/nxckdx/baotx/releases) for the exact tag — releases up to v1.5.0 are tagged `baotx-vX.Y.Z`, later releases use the plain `X.Y.Z` format (no `v` prefix).
+
+#### Keyring Support on NixOS (`token_storage: "keyring"`)
+
+The package already ships `secret-tool` (from `libsecret`) on `$PATH`, but `secret-tool` is just a client — it needs a running [Secret Service](https://specifications.freedesktop.org/secret-service/latest/) provider (e.g. `gnome-keyring`) to actually store anything. Unlike a full desktop distro, plain NixOS does not run one by default, so `keyring` storage will silently fail (or fall back to plain text) unless you enable it.
+
+The flake exposes a NixOS module that takes care of this:
+
+```nix
+{
+  inputs.baotx.url = "github:nxckdx/baotx";
+
+  # in your system flake outputs:
+  imports = [ inputs.baotx.nixosModules.default ];
+  programs.baotx.enable = true;
+}
+```
+
+This installs the package and enables `services.gnome.gnome-keyring`. You still need to enable PAM integration for your login manager so the keyring unlocks automatically at login — the PAM service name depends on your setup (e.g. `login`, `gdm`, `sddm`, `lightdm`):
+
+```nix
+security.pam.services.login.enableGnomeKeyring = true;
+```
+
+Without that last step, `secret-tool` will prompt you to unlock the keyring on first use each session instead of unlocking transparently at login.
+
+> [!NOTE]
+> `baotx update` is automatically disabled when BaoTx is running from `/nix/store` (i.e. installed via any of the methods above), since the Nix store is read-only. Update via `nix flake update` (flakes) or by bumping your nixpkgs/channel revision (tarball) instead.
 
 
 ## Shell Integration (Mandatory)
@@ -117,7 +144,7 @@ eval "$(baotx init bash)"
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
 | `baotx renew` | Renew the current token lease. |
 | `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output, `--policies` to see policy details, or `--all` for all clusters. |
-| `baotx update` | Check for updates and install the latest version from GitHub. |
+| `baotx update` | Check for updates and install the latest version from GitHub. Disabled automatically on Nix/NixOS installs (see [Keyring Support on NixOS](#keyring-support-on-nixos-token_storage-keyring) section). |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
 

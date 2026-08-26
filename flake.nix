@@ -69,5 +69,22 @@
             ];
           };
         });
+
+      # Installing the package alone is not enough for `token_storage: "keyring"`
+      # (the default) to work: `secret-tool` needs a running Secret Service
+      # provider. NixOS does not enable one by default outside of a full GNOME
+      # desktop, so this module wires up gnome-keyring for you.
+      nixosModules.default = { config, lib, pkgs, ... }:
+        let
+          cfg = config.programs.baotx;
+        in
+        {
+          options.programs.baotx.enable = lib.mkEnableOption "BaoTx, the context and login manager for OpenBao/Vault";
+
+          config = lib.mkIf cfg.enable {
+            environment.systemPackages = [ self.packages.${pkgs.stdenv.hostPlatform.system}.default ];
+            services.gnome.gnome-keyring.enable = true;
+          };
+        };
     };
 }
