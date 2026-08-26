@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/nxckdx/baotx/compare/1.6.0...1.6.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **release:** switch to release-type simple so VERSION actually gets bumped ([fcea575](https://github.com/nxckdx/baotx/commit/fcea57553b6006d24525027ef7f1d012b8bbafd5))
+
 ## [1.6.0](https://github.com/nxckdx/baotx/compare/v1.5.0...1.6.0) (2026-08-26)
 
 
