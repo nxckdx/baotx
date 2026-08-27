@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0](https://github.com/nxckdx/baotx/compare/1.6.1...1.7.0) (2026-08-27)
+
+
+### Features
+
+* add baotx status --format=json for scripting/monitoring ([dd81d27](https://github.com/nxckdx/baotx/commit/dd81d273e3e5d8a53981ece502d21216944c4a44))
+
+
+### Bug Fixes
+
+* custom cluster env vars never worked, and fix insecure-cluster namespace listing ([fc033f5](https://github.com/nxckdx/baotx/commit/fc033f5ca8e251457c376c41ccf8ea766fbcb196))
+* make date/timestamp handling and script-path resolution portable to macOS ([29f7e8b](https://github.com/nxckdx/baotx/commit/29f7e8b993d394cc220281e1e6673f5893396a69))
+
 ## [1.6.1](https://github.com/nxckdx/baotx/compare/1.6.0...1.6.1) (2026-08-26)
 
 
