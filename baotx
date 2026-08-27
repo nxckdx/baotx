@@ -63,6 +63,10 @@ _iso_plus_seconds() {
 
 _get_config() {
     local query="$1"
+    # Optional 2nd arg: extra yq flags, e.g. "-o=json" when the result will be
+    # fed to jq (yq's default output is YAML, which jq cannot parse).
+    local yq_flags=()
+    [[ -n "${2:-}" ]] && yq_flags=("$2")
     local files=()
     # Check which files actually exist
     for f in "${CONFIG_FILES[@]}"; do
@@ -72,7 +76,7 @@ _get_config() {
     if [[ ${#files[@]} -eq 0 ]]; then
         return
     elif [[ ${#files[@]} -eq 1 ]]; then
-        yq "$query" "${files[0]}" 2>/dev/null
+        yq "${yq_flags[@]}" "$query" "${files[0]}" 2>/dev/null
     else
         # Merge files: the first one in the list has the highest precedence.
         # yq merges from left to right, where right overwrites left.
@@ -81,7 +85,7 @@ _get_config() {
         for (( i=${#files[@]}-1; i>=0; i-- )); do
             rev_files+=("${files[i]}")
         done
-        yq eval-all ". as \$item ireduce ({}; . * \$item) | $query" "${rev_files[@]}" 2>/dev/null
+        yq eval-all "${yq_flags[@]}" ". as \$item ireduce ({}; . * \$item) | $query" "${rev_files[@]}" 2>/dev/null
     fi
 }
 
@@ -308,7 +312,7 @@ _export_context() {
                 echo "export $key=\"$value\""
                 exported_vars+="$key "
             fi
-        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
+        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + (.value | tostring)' 2>/dev/null || true)
     fi
     echo "export BAOTX_VARS=\"${exported_vars% }\""
 }
@@ -484,7 +488,7 @@ cmd_status() {
             addr=$(_get_config ".clusters.\"$cur\".address")
             token=$(_retrieve_token "$cur")
             ns=$(_get_config ".clusters.\"$cur\".namespace")
-            custom_env=$(_get_config ".clusters.\"$cur\".env" | jq -c '.' 2>/dev/null || echo "")
+            custom_env=$(_get_config ".clusters.\"$cur\".env" "-o=json")
             
             _export_context "$cur" "$addr" "$token" "$ns" "$custom_env"
         fi
@@ -604,7 +608,7 @@ cmd_load() {
         addr=$(_get_config ".clusters.\"$cur\".address")
         token=$(_retrieve_token "$cur")
         ns=$(_get_config ".clusters.\"$cur\".namespace")
-        custom_env=$(_get_config ".clusters.\"$cur\".env" | jq -c '.' 2>/dev/null || echo "")
+        custom_env=$(_get_config ".clusters.\"$cur\".env" "-o=json")
         _export_context "$cur" "$addr" "$token" "$ns" "$custom_env"
     fi
 }
@@ -794,11 +798,15 @@ cmd_namespace() {
 
     if [[ -z "$selected" ]]; then
         _log "Fetching namespaces from $cur..."
-        
+
         if [[ "$cli_tool" == "curl" ]]; then
-            namespaces=$(curl -s -f -H "X-Vault-Token: $token" "$addr/v1/sys/namespaces?list=true" | jq -r '.data.keys[]' 2>/dev/null || true)
+            local curl_insecure_arg=()
+            _is_insecure "$cur" && curl_insecure_arg=(-k)
+            namespaces=$(curl -s -f "${curl_insecure_arg[@]}" -H "X-Vault-Token: $token" "$addr/v1/sys/namespaces?list=true" | jq -r '.data.keys[]' 2>/dev/null || true)
         else
-            namespaces=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" VAULT_NAMESPACE="" "$cli_tool" namespace list -format=json 2>/dev/null | jq -r '.[]' 2>/dev/null || true)
+            local skip_verify=""
+            _is_insecure "$cur" && skip_verify="1"
+            namespaces=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" VAULT_NAMESPACE="" VAULT_SKIP_VERIFY="$skip_verify" BAO_SKIP_VERIFY="$skip_verify" "$cli_tool" namespace list -format=json 2>/dev/null | jq -r '.[]' 2>/dev/null || true)
         fi
 
         # Add root option and clean up
@@ -817,7 +825,7 @@ cmd_namespace() {
     fi
 
     local custom_env
-    custom_env=$(_get_config ".clusters.\"$cur\".env" | jq -c '.' 2>/dev/null || echo "")
+    custom_env=$(_get_config ".clusters.\"$cur\".env" "-o=json")
 
     if [[ "$selected" == "root" ]]; then
         _set_config "${ns_history_cmd}del(.clusters.\"$cur\".namespace)"
@@ -874,7 +882,7 @@ _perform_switch() {
     exp_token=$(_get_config ".clusters.\"$selected\".expire_token")
     ns=$(_get_config ".clusters.\"$selected\".namespace")
     cli_tool=$(_get_cli_tool)
-    custom_env=$(_get_config ".clusters.\"$selected\".env" | jq -c '.' 2>/dev/null || echo "")
+    custom_env=$(_get_config ".clusters.\"$selected\".env" "-o=json")
 
     # Export variables temporarily for validation checks and login
     if [[ -n "$ns" && "$ns" != "null" ]]; then
@@ -892,7 +900,7 @@ _perform_switch() {
             if [[ -n "$key" ]]; then
                 export "$key"="$value"
             fi
-        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
+        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + (.value | tostring)' 2>/dev/null || true)
     fi
 
     local needs_login="$force_login"
@@ -983,7 +991,7 @@ cmd_exec() {
 
     token=$(_retrieve_token "$cluster")
     ns=$(_get_config ".clusters.\"$cluster\".namespace")
-    custom_env=$(_get_config ".clusters.\"$cluster\".env" | jq -c '.' 2>/dev/null || echo "")
+    custom_env=$(_get_config ".clusters.\"$cluster\".env" "-o=json")
 
     # Export variables so they are available for token validation and the executed command
     export VAULT_ADDR="$addr"
@@ -1006,7 +1014,7 @@ cmd_exec() {
             if [[ -n "$key" ]]; then
                 export "$key"="$value"
             fi
-        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null || true)
+        done < <(echo "$custom_env" | jq -r 'to_entries | .[] | .key + "=" + (.value | tostring)' 2>/dev/null || true)
     fi
 
     # Check if login is needed
