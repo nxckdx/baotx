@@ -269,7 +269,13 @@ CONFIG="${BAOTX_CONFIG:-$HOME/.baoconfig.yaml}"
 exp=$(yq -r ".clusters.\"$cluster\".expire_token" "$CONFIG")
 
 if [ "$exp" != "null" ] && [ -n "$exp" ]; then
-    diff=$(( $(date -d "$exp" +%s) - $(date +%s) ))
+    # GNU date (-d) and BSD/macOS date (-j -f, strptime %z wants "+HHMM") are incompatible.
+    if date --version >/dev/null 2>&1; then
+        exp_epoch=$(date -d "$exp" +%s 2>/dev/null)
+    else
+        exp_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "$(echo "$exp" | sed -E 's/([+-][0-9]{2}):([0-9]{2})$/\1\2/')" +%s 2>/dev/null)
+    fi
+    diff=$(( exp_epoch - $(date +%s) ))
     
     if [ $diff -le 0 ]; then
         # TOKEN EXPIRED
