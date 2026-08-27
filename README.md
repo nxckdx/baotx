@@ -143,10 +143,40 @@ eval "$(baotx init bash)"
 | `baotx login` | Force a new interactive login for the current cluster. |
 | `baotx login <name> [method]` | Force login for a specific cluster (optionally with a specific method). |
 | `baotx renew` | Renew the current token lease. |
-| `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output, `--policies` to see policy details, or `--all` for all clusters. |
+| `baotx status` | Show current cluster, address, and TTL. Use `--format=env` for .env output, `--format=json` for machine-readable output, `--policies` to see policy details, or `--all` for all clusters. |
 | `baotx update` | Check for updates and install the latest version from GitHub. Disabled automatically on Nix/NixOS installs (see [Keyring Support on NixOS](#keyring-support-on-nixos-token_storage-keyring) section). |
 | `baotx clear` | Unset all environment variables and clear context. |
 | `baotx help` | Show detailed help message. |
+
+## Machine-Readable Status (`--format=json`)
+
+`baotx status --format=json` prints one JSON object (or, with `--all`, an array of them) instead of the formatted text output, for scripting or monitoring:
+
+```bash
+baotx status --format=json | jq -r '.expires_in_seconds'
+baotx status --format=json --all | jq -r '.[] | select(.expired) | .cluster'
+```
+
+Each object looks like this:
+
+```json
+{
+  "cluster": "prod",
+  "current": true,
+  "address": "https://bao.example.com",
+  "namespace": "admin",
+  "logged_in": true,
+  "expires_at": "2026-08-27T15:23:33+02:00",
+  "expires_in_seconds": 3421,
+  "expired": false,
+  "policies": ["default", "admins"]
+}
+```
+
+`policies` is only populated for a single cluster (the default, or `--all --policies`) since it requires one extra lookup per cluster — otherwise it's `null`, same as `expires_at`/`expires_in_seconds`/`expired` when the cluster isn't logged in. Calling `baotx status --format=json` with no current cluster and no `--all` prints `null`.
+
+> [!NOTE]
+> If you use the shell integration from `baotx init`, `baotx status --format=json` (unlike plain `baotx status`) bypasses the wrapper function's `eval` and streams straight to stdout, so piping it into `jq` works as expected.
 
 ## Hook-Scripts
 

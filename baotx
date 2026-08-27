@@ -425,7 +425,7 @@ cmd_init() {
             cat <<EOF
 baotx() {
     local out
-    if [[ "\$1" == "exec" || "\$1" == "completion" || "\$1" == "init" ]]; then
+    if [[ "\$1" == "exec" || "\$1" == "completion" || "\$1" == "init" || "\$*" == *"--format=json"* ]]; then
         command baotx "\$@"
         return \$?
     fi
@@ -469,12 +469,105 @@ EOF
     esac
 }
 
-# DESC: Shows current context and token TTL (use --format=env for .env output, --policies for policy details, --all for all clusters)
+# Machine-readable counterpart to cmd_status's default text rendering.
+# Emits one JSON object per cluster (a single object, or an array with --all).
+_cmd_status_json() {
+    local show_policies="$1" show_all="$2"
+
+    local clusters_to_show=()
+    if [[ "$show_all" -eq 1 ]]; then
+        while read -r line; do [[ -n "$line" ]] && clusters_to_show+=("$line"); done < <(_get_config '.clusters | keys[]' 2>/dev/null)
+    else
+        local cur
+        cur=$(_get_config '.current-cluster')
+        if [[ -z "$cur" || "$cur" == "null" ]]; then
+            echo "null"
+            return
+        fi
+        clusters_to_show+=("$cur")
+    fi
+
+    local current_active
+    current_active=$(_get_config '.current-cluster')
+
+    local objects=()
+    for cluster in "${clusters_to_show[@]}"; do
+        local addr ns token cli_tool exp curl_insecure_arg=()
+        addr=$(_get_config ".clusters.\"$cluster\".address")
+        ns=$(_get_config ".clusters.\"$cluster\".namespace")
+        token=$(_retrieve_token "$cluster")
+        cli_tool=$(_get_cli_tool)
+        exp=$(_get_config ".clusters.\"$cluster\".expire_token")
+
+        if _is_insecure "$cluster"; then
+            curl_insecure_arg=(-k)
+            export VAULT_SKIP_VERIFY="1"
+            export BAO_SKIP_VERIFY="1"
+        else
+            unset VAULT_SKIP_VERIFY BAO_SKIP_VERIFY
+        fi
+
+        local current_json="false"
+        [[ "$cluster" == "$current_active" ]] && current_json="true"
+
+        local ns_json="null"
+        [[ -n "$ns" && "$ns" != "null" ]] && ns_json=$(jq -cn --arg v "$ns" '$v')
+
+        local logged_in_json="false"
+        local expires_at_json="null" expires_in_json="null" expired_json="null" policies_json="null"
+
+        if [[ -n "$token" ]]; then
+            logged_in_json="true"
+
+            if [[ -n "$exp" && "$exp" != "null" ]]; then
+                local diff
+                diff=$(( $(_epoch_from_iso "$exp") - $(_epoch_now) ))
+                expires_at_json=$(jq -cn --arg v "$exp" '$v')
+                expires_in_json="$diff"
+                (( diff <= 0 )) && expired_json="true" || expired_json="false"
+            fi
+
+            # Only pay for a policy lookup when showing a single cluster or when explicitly asked.
+            if [[ "$show_all" -eq 0 || "$show_policies" -eq 1 ]]; then
+                local lookup_json=""
+                if [[ "$cli_tool" == "curl" ]]; then
+                    lookup_json=$(curl -s -f "${curl_insecure_arg[@]}" -H "X-Vault-Token: $token" "$addr/v1/auth/token/lookup-self" 2>/dev/null || true)
+                else
+                    lookup_json=$(VAULT_ADDR="$addr" VAULT_TOKEN="$token" "$cli_tool" token lookup -format=json 2>/dev/null || true)
+                fi
+                if [[ -n "$lookup_json" ]]; then
+                    policies_json=$(echo "$lookup_json" | jq -c '[(.data.policies + (.data.identity_policies // [])) | unique[]]' 2>/dev/null || echo "null")
+                fi
+            fi
+        fi
+
+        objects+=("$(jq -n \
+            --arg cluster "$cluster" \
+            --argjson current "$current_json" \
+            --arg address "$addr" \
+            --argjson namespace "$ns_json" \
+            --argjson logged_in "$logged_in_json" \
+            --argjson expires_at "$expires_at_json" \
+            --argjson expires_in_seconds "$expires_in_json" \
+            --argjson expired "$expired_json" \
+            --argjson policies "$policies_json" \
+            '{cluster:$cluster,current:$current,address:$address,namespace:$namespace,logged_in:$logged_in,expires_at:$expires_at,expires_in_seconds:$expires_in_seconds,expired:$expired,policies:$policies}')")
+    done
+
+    if [[ "$show_all" -eq 1 ]]; then
+        printf '%s\n' "${objects[@]}" | jq -s '.'
+    else
+        echo "${objects[0]}"
+    fi
+}
+
+# DESC: Shows current context and token TTL (use --format=env for .env output, --format=json for machine-readable output, --policies for policy details, --all for all clusters)
 cmd_status() {
     local format="" show_policies=0 show_all=0
     for arg in "$@"; do
         case "$arg" in
             --format=env) format="env" ;;
+            --format=json) format="json" ;;
             --policies) show_policies=1 ;;
             --all) show_all=1 ;;
         esac
@@ -489,9 +582,14 @@ cmd_status() {
             token=$(_retrieve_token "$cur")
             ns=$(_get_config ".clusters.\"$cur\".namespace")
             custom_env=$(_get_config ".clusters.\"$cur\".env" "-o=json")
-            
+
             _export_context "$cur" "$addr" "$token" "$ns" "$custom_env"
         fi
+        return
+    fi
+
+    if [[ "$format" == "json" ]]; then
+        _cmd_status_json "$show_policies" "$show_all"
         return
     fi
 
@@ -1103,7 +1201,7 @@ _baotx_completion() {
                 ;;
             status)
                 local -a flags
-                flags=('--format=env:Output environment variables' '--policies:Show policy details' '--all:Show status of all clusters')
+                flags=('--format=env:Output environment variables' '--format=json:Output machine-readable JSON' '--policies:Show policy details' '--all:Show status of all clusters')
                 _describe -t flags 'flags' flags
                 ;;
             set-cli)
@@ -1142,7 +1240,7 @@ EOF
     fi
     case "$prev" in
         login|select|namespace|ns|exec) COMPREPLY=( $(compgen -W "$clusters" -- "$cur") ); return 0 ;;
-        status) COMPREPLY=( $(compgen -W "--format=env --policies --all" -- "$cur") ); return 0 ;;
+        status) COMPREPLY=( $(compgen -W "--format=env --format=json --policies --all" -- "$cur") ); return 0 ;;
         set-cli) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
     esac
 }
